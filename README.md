@@ -1,85 +1,63 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Catálogo de Filmes Sáficos
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Este projeto é uma aplicação web que serve como um catálogo de filmes. Ele permite que os usuários explorem, adicionem, editem e removam filmes do catálogo. A aplicação utiliza **Puppeteer** para coletar informações relevantes sobre os filmes da internet, garantindo que os dados estejam sempre atualizados e completos.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Funcionalidades Principais
 
-## Description
+- **CRUD de Filmes**: Permite adicionar, listar, editar e remover filmes do catálogo.
+- **Web Scraping com Puppeteer**: Coleta automaticamente informações sobre filmes de fontes confiáveis na internet.
+- **Interface Amigável**: Uma interface intuitiva que facilita a navegação e a busca por filmes.
+- **Filtragem e Pesquisa**: Os usuários podem filtrar e pesquisar filmes por gênero, ano de lançamento e outras categorias.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Índice
 
-## Project setup
+- [Tecnologias](#tecnologias)
+- [Configuração do Ambiente](#configuração-do-ambiente)
+- [Instalação e Execução do Projeto](#instalação-e-execução-do-projeto)
+- [Uso](#uso)
 
-```bash
-$ npm install
-```
+## Tecnologias
 
-## Compile and run the project
+- **Node.js**: Ambiente de execução.
+- **NestJS**: Framework para construir aplicações escaláveis e eficientes.
+- **Prisma**: ORM para manipulação de banco de dados.
+- **PostgreSQL**: Sistema de gerenciamento de banco de dados.
+- **TypeScript**: Linguagem utilizada para o desenvolvimento do projeto.
+- **Puppeteer**: Biblioteca para automação de navegadores e web scraping.
 
-```bash
-# development
-$ npm run start
+## Configuração do Ambiente
 
-# watch mode
-$ npm run start:dev
+Este projeto utiliza um arquivo `.env` para gerenciar as variáveis de ambiente necessárias para a conexão com o banco de dados e outras configurações.
 
-# production mode
-$ npm run start:prod
-```
+### Passos para Configurar o Arquivo `.env`
 
-## Run tests
+1. **Criar o Arquivo `.env`**:
+   No diretório raiz do seu projeto, crie um arquivo chamado `.env`.
 
-```bash
-# unit tests
-$ npm run test
+2. **Adicionar Variáveis de Ambiente**:
+   Abra o arquivo `.env` e adicione as seguintes variáveis, substituindo os valores de exemplo pelos seus dados reais:
 
-# e2e tests
-$ npm run test:e2e
+   ```env
+   DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
-# test coverage
-$ npm run test:cov
-```
+## Instalação e Execução do Projeto
 
-## Resources
+1. **Clone o repositório**:
+   git clone https://github.com/michellekenia/cine-safico
+  cd cine-safico
 
-Check out a few resources that may come in handy when working with NestJS:
+2. **Clone o repositório**:
+   npm install
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+3. **Execute as migrações do banco de dados**:
+   npx prisma migrate dev
 
-## Support
+4. **Inicie a aplicação**:
+   npm run start
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+5. **Inicie a aplicação**:
+   Acesse a aplicação no navegador ou através de uma ferramenta como Postman em http://localhost:3000.
 
-## Stay in touch
+## Uso
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Após a configuração e execução, você pode acessar a API através dos seguintes endpoints:

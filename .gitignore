@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# Ambiente
+.env
+
 # Logs
 logs
 *.log
