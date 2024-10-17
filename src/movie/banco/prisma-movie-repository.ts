@@ -3,7 +3,9 @@ import { MovieRepositoryPort } from "src/core/ports/movie-repository-port";
 import { Movie } from "src/core/domain/movie.model";
 import { PrismaService } from "src/adapters/prisma.service";
 import { CreateMovieDto } from "../dto/create-movie.dto";
+import { Injectable } from "@nestjs/common";
 
+@Injectable()
 export class PrismaMovieRepository implements MovieRepositoryPort {
 
     constructor(private readonly prismaService: PrismaService) { }
