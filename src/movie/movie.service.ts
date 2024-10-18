@@ -1,41 +1,37 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { CreateMovieDto } from './dto/create-movie.dto';
 import { UpdateMovieDto } from './dto/update-movie.dto';
-import { CreateMovieUseCase } from './use-cases/create-movie.use-case';
-import { DeleteMovieUseCase } from './use-cases/delete-movie.use-case';
-import { FindAllMoviesUseCase } from './use-cases/find-all-movies.use-case';
-import { FindMovieByIdUseCase } from './use-cases/find-movie-by-id.use-case';
-import { UpdateMovieUseCase } from './use-cases/update-movie.use-case';
+import { MovieRepositoryPort } from 'src/core/ports/movie-repository-port';
+import { Movie } from 'src/core/domain/movie.model';
+
 
 
 @Injectable()
 export class MovieService {
 
   constructor(
-    private readonly createMovieUseCase: CreateMovieUseCase,
-    private readonly updateMovieUseCase: UpdateMovieUseCase,
-    private readonly findMovieByIdUseCase: FindMovieByIdUseCase,
-    private readonly findAllMoviesUseCase: FindAllMoviesUseCase,
-    private readonly deleteMovieUseCase: DeleteMovieUseCase,
-) {}
+    @Inject('MovieRepositoryPort')
+    private readonly movieRepository: MovieRepositoryPort
+  ) { }
 
-  create(createMovieDto: CreateMovieDto) {
-    return this.createMovieUseCase.execute(createMovieDto)
+  async create(createMovieDto: CreateMovieDto): Promise<Movie> {
+    return this.movieRepository.create(createMovieDto)
   }
 
-  findAll() {
-    return this.findAllMoviesUseCase.execute()
+  async findAll(): Promise<Movie[]> {
+    return this.movieRepository.findAll();
   }
 
-  findById(id: number) {
-    return this.findMovieByIdUseCase.execute(id)
+  async findById(id: number): Promise<Movie | null> {
+    return this.movieRepository.findById(id);
   }
 
-  update(id: number, updateMovieDto: UpdateMovieDto) {
-    return this.updateMovieUseCase.execute(id, updateMovieDto)
+  async update(id: number, updateMovieDto: UpdateMovieDto): Promise<Movie> {
+    return this.movieRepository.update(id, updateMovieDto);
   }
 
-  remove(id: number) {
-    return this.deleteMovieUseCase.execute(id)
+  async remove(id: number): Promise<void> {
+    return this.movieRepository.delete(id);
   }
+
 }
