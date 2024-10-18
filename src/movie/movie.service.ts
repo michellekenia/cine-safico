@@ -19,19 +19,19 @@ export class MovieService {
   }
 
   async findAll(): Promise<Movie[]> {
-    return this.movieRepository.findAll();
+    return this.movieRepository.findAll()
   }
 
   async findById(id: number): Promise<Movie | null> {
-    return this.movieRepository.findById(id);
+    return this.movieRepository.findById(id)
   }
 
   async update(id: number, updateMovieDto: UpdateMovieDto): Promise<Movie> {
-    return this.movieRepository.update(id, updateMovieDto);
+    return this.movieRepository.update(id, updateMovieDto)
   }
 
   async remove(id: number): Promise<void> {
-    return this.movieRepository.delete(id);
+    return this.movieRepository.delete(id)
   }
 
 }
