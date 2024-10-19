@@ -15,6 +15,7 @@ Este projeto é uma aplicação web que serve como um catálogo de filmes. Ele p
 - [Configuração do Ambiente](#configuração-do-ambiente)
 - [Instalação e Execução do Projeto](#instalação-e-execução-do-projeto)
 - [Uso](#uso)
+- [Observações](#observações)
 
 ## Tecnologias
 
@@ -43,21 +44,74 @@ Este projeto utiliza um arquivo `.env` para gerenciar as variáveis de ambiente 
 ## Instalação e Execução do Projeto
 
 1. **Clone o repositório**:
-   git clone https://github.com/michellekenia/cine-safico
-  cd cine-safico
 
-2. **Clone o repositório**:
+   ```bash
+   git clone https://github.com/michellekenia/cine-safico
+   cd cine-safico
+
+2. **Instale as dependências**:
+   ```bash
    npm install
 
 3. **Execute as migrações do banco de dados**:
+   ```bash
    npx prisma migrate dev
 
 4. **Inicie a aplicação**:
+   ```bash
    npm run start
 
-5. **Inicie a aplicação**:
-   Acesse a aplicação no navegador ou através de uma ferramenta como Postman em http://localhost:3000.
+4. **Inicie a aplicação**:
+   ```bash
+   npm run start
 
 ## Uso
 
-Após a configuração e execução, você pode acessar a API através dos seguintes endpoints:
+**Após a configuração e execução, você pode acessar a API através dos seguintes endpoints**:
+
+**1. Criar Filme (POST)**
+
+**URL: http://localhost:3000/filmes**
+   
+
+**Corpo da Requisição:**
+   ~~~json
+   { 
+      "title": "Crush",
+      "releaseDate": "2022-04-29T00:00:00Z",
+      "director": "Sammi Cohen",
+      "synopsis": "Uma jovem artista se junta à equipe de atletismo de sua escola e descobre o que é o amor verdadeiro ao longo do caminho.",
+      "streamingPlatform": "Hulu"
+      }
+     
+   ~~~
+
+
+**2. Pegar Todos os Filmes (GET)**
+
+**URL: http://localhost:3000/filmes**
+
+**3. Pegar um Filme Específico (GET)**
+
+**URL: http://localhost:3000/filmes/{id}**
+
+Substituir {id} pelo ID do filme que deseja buscar.
+
+**4. Atualizar um Filme (PUT)**
+
+**URL: http://localhost:3000/filmes/{id}**
+
+Substituir {id} pelo ID do filme a ser atualizado e enviar os novos dados no corpo.
+
+**5. Deletar um Filme (DELETE)**
+
+**URL: http://localhost:3000/filmes/{id}**
+
+Substituir {id} pelo ID do filme a ser deletado.
+
+### Acesso através do link: http://52.0.25.119:3000/movies
+
+## Observações
+
+### Projeto em andamento, algumas implementações ainda serão realizadas. 
+

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Injectable } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Injectable, ParseIntPipe } from '@nestjs/common';
 import { MovieService } from '../movie.service';
 import { CreateMovieDto } from '../dto/create-movie.dto';
 import { UpdateMovieDto } from '../dto/update-movie.dto';
@@ -15,25 +15,23 @@ export class MovieController {
 
   @Get()
   async findAll(): Promise<Movie[]> {
-    return this.movieService.findAll();
+    return this.movieService.findAll()
   }
 
   @Get(':id')
-  findById(@Param('id') id: number) {
+  findById(@Param('id', ParseIntPipe) id: number) {
     return this.movieService.findById(id)
   }
 
   @Patch(':id')
   async update(
-    @Param('id') id: number,
-    @Body() updateMovieDto: UpdateMovieDto
-  ): Promise<Movie> {
-    return this.movieService.update(id, updateMovieDto);
+    @Param('id', ParseIntPipe) id: number, @Body() updateMovieDto: UpdateMovieDto): Promise<Movie> {
+    return this.movieService.update(id, updateMovieDto)
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: number): Promise<void> {
-    return this.movieService.remove(id);
+  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.movieService.remove(id)
   }
 
 }
