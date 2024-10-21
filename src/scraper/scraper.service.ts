@@ -20,13 +20,9 @@ export class ScraperService {
         const browser = await puppeteer.launch();
         const page = await browser.newPage();
 
-        // Acesse a página da lista
         await page.goto(listLink, { waitUntil: 'domcontentloaded' });
-
-        // Aguardar até que os links dos filmes estejam presentes
         await page.waitForSelector('a.frame');
 
-        // Coletar links dos filmes
         const movieLinks = await page.evaluate(() => {
             const links: string[] = [];
             const filmElements = document.querySelectorAll('a.frame');
@@ -34,7 +30,7 @@ export class ScraperService {
             filmElements.forEach((element) => {
                 const href = element.getAttribute('href');
                 if (href) {
-                    links.push(`https://letterboxd.com${href}`); // Construindo a URL completa
+                    links.push(`https://letterboxd.com${href}`);
                 }
             });
 
@@ -49,10 +45,8 @@ export class ScraperService {
         const browser = await puppeteer.launch();
         const page = await browser.newPage();
 
-        // Acesse a página do filme
         await page.goto(movieLink, { waitUntil: 'domcontentloaded' });
 
-        // Raspar informações do filme
         const movieDetails = await page.evaluate(() => {
             const title = document.querySelector('meta[property="og:title"]')?.getAttribute('content') || '';
             const releaseDate = document.querySelector('span#film-release-date')?.textContent || '';

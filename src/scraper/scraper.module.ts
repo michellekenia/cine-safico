@@ -7,6 +7,6 @@ import { PrismaService } from 'src/adapters/prisma.service';
 
 @Module({
     controllers: [ScraperController],
-    providers: [ScraperService, PrismaService], // Adicione o PrismaService
+    providers: [ScraperService, PrismaService],
 })
 export class ScraperModule {}
