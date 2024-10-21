@@ -18,24 +18,19 @@ export class ScraperService {
         return movies;
     }
 
-    private async scrapeMovieLinks(listLink: string): Promise<string[]> {
-        const browser = await puppeteer.launch();
-        const page = await browser.newPage();
+    async scrapeMovieLinks(listLink: string): Promise<string[]> {
+        const browser = await puppeteer.launch()
+        const page = await browser.newPage()
+        const movieLinks: string[] = []
     
         console.log(`Navegando para a lista de filmes: ${listLink}`)
         await page.goto(listLink, { waitUntil: 'domcontentloaded' })
     
-        await page.waitForSelector('a.frame');
-        
-        const allMovieLinks: string[] = [];
-        let hasNextPage = true;
-        let currentPage = 1;
+        while (true) {
+            await page.waitForSelector('a.frame')
     
-        while (hasNextPage) {
-            console.log(`Coletando links da página: ${currentPage}`)
-
             const linksOnPage = await page.evaluate(() => {
-                const links: string[] = []
+                const links: string[] = [];
                 const filmElements = document.querySelectorAll('a.frame')
     
                 filmElements.forEach((element) => {
@@ -45,32 +40,32 @@ export class ScraperService {
                     }
                 });
     
-                return links
+                return links;
             });
     
-            allMovieLinks.push(...linksOnPage);
             console.log(`Links coletados nesta página: ${linksOnPage.length}`)
+            movieLinks.push(...linksOnPage)
     
-            hasNextPage = await page.$('.paginate-nextprev a.next') !== null
-    
-        
-            if (hasNextPage) {
-                const nextButton = await page.$('.paginate-nextprev a.next')
-                if (nextButton) {
-                    await nextButton.click();
-                    await page.waitForSelector('a.frame')
-                }
+            const nextButton = await page.$('a.next')
+            if (nextButton) {
+                console.log('Clicando no botão "Próxima Página"...')
+                await Promise.all([
+                    nextButton.click(),
+                    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+                ]);
+            } else {
+                console.log('Não há mais páginas para navegar.')
+                break;
             }
-    
-            currentPage++;
         }
     
-        console.log(`Total de links coletados: ${allMovieLinks.length}`)
-        await browser.close()
-        return allMovieLinks
+        await browser.close();
+        console.log(`Total de links coletados: ${movieLinks.length}`)
+        return movieLinks;
     }
     
-    private async scrapeMovieDetails(movieLink: string): Promise<any> {
+    
+    async scrapeMovieDetails(movieLink: string): Promise<any> {
         const browser = await puppeteer.launch()
         const page = await browser.newPage()
         
