@@ -109,7 +109,11 @@ Substituir {id} pelo ID do filme a ser atualizado e enviar os novos dados no cor
 
 Substituir {id} pelo ID do filme a ser deletado.
 
-### Acesso através do link: http://52.0.25.119:3000/movies
+**6. Rodar o Scrapping**
+
+**URL: http://localhost:3000/scraper/movies**
+
+Visualizar a lista de filmes coletados.
 
 ## Observações
 
