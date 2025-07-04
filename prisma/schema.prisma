@@ -9,10 +9,12 @@ datasource db {
 }
 
 model Movie {
-  id                  Int       @id @default(autoincrement())
-  title               String
-  releaseDate         DateTime  @map("release_date")
-  director            String
-  synopsis            String?   @db.Text @map("synopsis")
-  streamingPlatform   String?   @db.VarChar(255) @map("streaming_platform")
+  id                Int       @id @default(autoincrement())
+  title             String
+  releaseDate       DateTime? @map("release_date")
+  director          String
+  synopsis          String?   @db.Text @map("synopsis")
+  streamingPlatform String?   @db.VarChar(255) @map("streaming_platform")
+  posterImage       String?   @map("poster_image")
 }
+
