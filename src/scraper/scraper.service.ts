@@ -1,20 +1,52 @@
 import { Injectable } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
+import { PrismaService } from 'src/adapters/prisma.service';
 
 @Injectable()
 export class ScraperService {
+    constructor(private readonly prisma: PrismaService) {}
     async scrapeMovies(listLink: string): Promise<any[]> {
         console.log(`Iniciando a raspagem de filmes na lista: ${listLink}`)
-        const movieLinks = await this.scrapeMovieLinks(listLink)
+        
+        const existingMovies = await this.prisma.scrapedMovie.findMany({ select: { slug: true } });
+        const existingSlugs = new Set(existingMovies.map((m) => m.slug));
+
+        const movieLinks = await this.scrapeMovieLinks(listLink);
         const movies = [];
 
         for (const link of movieLinks) {
-            console.log(`Raspando detalhes do filme: ${link}`)
-            const movieDetails = await this.scrapeMovieDetails(link)
-            movies.push(movieDetails)
+            console.log(`Raspando detalhes do filme: ${link}`);
+            const slug = this.extractSlugFromUrl(link);
+            if (slug && existingSlugs.has(slug)) {
+                console.log(`Filme já existe no banco: ${slug}`);
+                continue;
+            }
+            try {
+                const movieDetails = await this.scrapeMovieDetails(link);
+                const movieData = {
+                    title: movieDetails.title,
+                    releaseDate: movieDetails.releaseDate || null,
+                    director: movieDetails.director || null,
+                    synopsis: movieDetails.synopsis || null,
+                    posterImage: movieDetails.posterImage || null,
+                    slug: slug,
+                };
+                console.log('Dados a serem salvos:', movieData);
+                try {
+                    await this.prisma.scrapedMovie.create({ data: movieData });
+                    console.log('Filme salvo:', movieData.slug);
+                    movies.push(movieData);
+                } catch (err) {
+                    console.error('Erro ao salvar no banco:', err);
+                    movies.push({ error: true, link, slug, message: err.message });
+                }
+            } catch (e) {
+                console.warn(`Erro ao raspar ${link}: ${e.message}`);
+                movies.push({ error: true, link, slug, message: e.message });
+            }
         }
 
-        console.log(`Total de filmes raspados: ${movies.length}`)
+        console.log(`Total de filmes raspados: ${movies.length}`);
         return movies;
     }
 
@@ -86,4 +118,9 @@ export class ScraperService {
         await browser.close()
         return movieDetails
     }
+
+    extractSlugFromUrl(url: string): string | null {
+    const match = url.match(/letterboxd\.com\/film\/([^\/]+)\//);
+    return match ? match[1] : null;
+  }
 }

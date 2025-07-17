@@ -18,3 +18,13 @@ model Movie {
   posterImage       String?   @map("poster_image")
 }
 
+model ScrapedMovie {
+  id           Int      @id @default(autoincrement())
+  title        String
+  releaseDate  String?
+  director     String?
+  synopsis     String?
+  posterImage  String?
+  slug         String   @unique
+  scrapedAt    DateTime @default(now())
+}
