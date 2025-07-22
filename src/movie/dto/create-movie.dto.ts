@@ -20,4 +20,7 @@ export class CreateMovieDto {
   @IsOptional()
   @IsString()
   streamingPlatform?: string;
+
+  @IsString()
+  slug: string;
 }

@@ -4,12 +4,12 @@ import { ScraperService } from './scraper.service';
 
 @Controller('scraper')
 export class ScraperController {
-    constructor(private readonly scraperService: ScraperService) {}
+  constructor(private readonly scraperService: ScraperService) {}
 
-    @Get('movies')
-    async getMovies() {
-        const listLink = 'https://letterboxd.com/osasco12/list/saficos/'; 
-        const movies = await this.scraperService.scrapeMovies(listLink);
-        return movies;
-    }
+  @Get('movies')
+  async getMovies() {
+    const listLink = 'https://letterboxd.com/osasco12/list/saficos/';
+    const movies = await this.scraperService.scrapeMovies(listLink);
+    return movies;
+  }
 }
