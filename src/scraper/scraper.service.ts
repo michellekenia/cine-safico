@@ -1,12 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
-import { Browser, Page } from 'puppeteer';
+import { Browser } from 'puppeteer';
 import { PrismaService } from 'src/adapters/prisma.service';
 import { ScrapedMovie } from '@prisma/client';
+import { Page } from 'puppeteer';
 
 interface MovieDetails {
   title: string | null;
-  releaseDate: string | null;
+  releaseYear: string | null;
   director: string | null;
   synopsis: string | null;
   posterImage: string | null;
@@ -41,6 +42,63 @@ const SELECTORS = {
   },
 };
 
+/**
+ * Rola a página até o final para garantir que todo o conteúdo de lazy loading seja carregado.
+ * @param page A instância da página do Puppeteer.
+ */
+async function autoScroll(page: Page) {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve) => {
+      let totalHeight = 0;
+      const distance = 100;
+      const timer = setInterval(() => {
+        const scrollHeight = document.body.scrollHeight;
+        window.scrollBy(0, distance);
+        totalHeight += distance;
+
+        if (totalHeight >= scrollHeight) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 100);
+    });
+  });
+}
+
+/**
+ * Executa uma ação assíncrona com um número máximo de tentativas.
+ * @param action A função (Promise) a ser executada.
+ * @param maxRetries O número máximo de tentativas.
+ * @param logger O logger para registrar as tentativas.
+ * @param context Uma string de contexto para a mensagem de log.
+ * @returns O resultado da ação se for bem-sucedida.
+ */
+async function scrapeWithRetries<T>(
+  action: () => Promise<T>,
+  maxRetries: number,
+  logger: Logger,
+  context: string,
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await action();
+    } catch (error) {
+      logger.warn(
+        `Tentativa ${attempt} falhou para ${context}: ${error.message}`,
+      );
+      if (attempt === maxRetries) {
+        logger.error(
+          `Todas as ${maxRetries} tentativas falharam para ${context}. Desistindo.`,
+        );
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+    }
+  }
+  throw new Error('Lógica de retries falhou inesperadamente.');
+}
+
 @Injectable()
 export class ScraperService implements OnModuleDestroy {
   private readonly logger = new Logger(ScraperService.name);
@@ -59,7 +117,10 @@ export class ScraperService implements OnModuleDestroy {
     this.logger.log(`Iniciando processo de raspagem da lista: ${listLink}`);
 
     try {
-      this.browser = await puppeteer.launch({ headless: true });
+      this.browser = await puppeteer.launch({
+        headless: true,
+        timeout: 120000,
+      });
 
       const existingSlugs = new Set(
         (
@@ -72,7 +133,6 @@ export class ScraperService implements OnModuleDestroy {
 
       for (const link of movieLinks) {
         const slug = this.extractSlugFromUrl(link);
-
         if (!slug || existingSlugs.has(slug)) {
           if (slug)
             this.logger.log(`Filme já existe no banco, pulando: ${slug}`);
@@ -80,37 +140,39 @@ export class ScraperService implements OnModuleDestroy {
         }
 
         try {
-          const { details, streaming } = await this.scrapeMoviePage(
-            this.browser,
-            link,
+          const { details, streaming } = await scrapeWithRetries(
+            () => this.scrapeMoviePage(this.browser!, link),
+            3,
+            this.logger,
+            `filme ${slug}`,
           );
 
           if (!details.title) {
-            this.logger.warn(`Título não encontrado para ${link}, pulando.`);
+            this.logger.warn(
+              `Título não encontrado para ${link}, pulando intencionalmente.`,
+            );
             continue;
           }
 
-          const movieData = {
-            slug: slug,
-            title: details.title,
-            releaseDate: details.releaseDate,
-            director: details.director,
-            synopsis: details.synopsis,
-            posterImage: details.posterImage,
-            streamingServices: {
-              create: streaming,
-            },
-          };
-
           const savedMovie = await this.prisma.scrapedMovie.create({
-            data: movieData,
+            data: {
+              slug,
+              title: details.title,
+              releaseDate: details.releaseYear,
+              director: details.director,
+              synopsis: details.synopsis,
+              posterImage: details.posterImage,
+              streamingServices: {
+                create: streaming,
+              },
+            },
           });
 
-          this.logger.log(`✅ Filme e serviços salvos: ${savedMovie.slug}`);
+          this.logger.log(`✅ Filme salvo: ${savedMovie.slug}`);
           newMovies.push(savedMovie);
         } catch (e) {
           this.logger.error(
-            `❌ Falha ao processar ${link}: ${e.message}`,
+            `❌ Falha final ao processar ${link} após todas as tentativas: ${e.message}`,
             e.stack,
           );
         }
@@ -125,49 +187,63 @@ export class ScraperService implements OnModuleDestroy {
         `Um erro crítico ocorreu durante a raspagem: ${error.message}`,
         error.stack,
       );
-      return []; // Retorna vazio em caso de falha crítica
+      return [];
     } finally {
       if (this.browser) {
-        this.logger.log('Fechando o navegador no bloco finally.');
+        this.logger.log('Encerrando instância do navegador...');
         await this.browser.close();
         this.browser = null;
       }
     }
   }
 
-  private async scrapeMovieLinks(
-    browser: Browser,
-    listLink: string,
-  ): Promise<string[]> {
+
+
+  private async scrapeMovieLinks(browser: Browser, listLink: string): Promise<string[]> {
     const page = await browser.newPage();
-    this.logger.log(`Navegando para a lista: ${listLink}`);
+    page.setDefaultNavigationTimeout(120000);
+
+    this.logger.log(`Navegando para a lista de filmes: ${listLink}`);
     await page.goto(listLink, { waitUntil: 'networkidle2' });
 
     const movieLinks: string[] = [];
     let hasNextPage = true;
+    let pageCount = 1;
 
     while (hasNextPage) {
-      await page.waitForSelector(SELECTORS.list.movieFrame);
-      const linksOnPage = await page.evaluate(
-        (selector) =>
-          Array.from(
-            document.querySelectorAll(selector),
-            (el) => (el as HTMLAnchorElement).href,
-          ),
+      this.logger.log(`Analisando página da lista: ${pageCount}...`);
+      await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 60000 });
+
+      
+      this.logger.log('Iniciando scroll para carregar todos os filmes (lazy loading)...');
+      await autoScroll(page);
+      this.logger.log('Scroll finalizado.');
+
+    
+      const linksOnPage = await page.evaluate((selector) =>
+        Array.from(document.querySelectorAll(selector), (el) => (el as HTMLAnchorElement).href),
         SELECTORS.list.movieFrame,
       );
       movieLinks.push(...linksOnPage);
       this.logger.log(`Coletados ${linksOnPage.length} links nesta página.`);
 
+      // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
-      if (nextButton) {
-        this.logger.log('Navegando para a próxima página...');
+      // remover '&& pageCount < 2' para a raspagem completa
+      if (nextButton && pageCount < 2) { 
+        this.logger.log(`Navegando da página ${pageCount} para a ${pageCount + 1}...`);
         await Promise.all([
           nextButton.click(),
           page.waitForNavigation({ waitUntil: 'networkidle2' }),
         ]);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
+        pageCount++;
       } else {
+        if (!nextButton) {
+          this.logger.log('Não há mais páginas para navegar.');
+        } else {
+          this.logger.log('Limite de 2 páginas atingido para o teste. Parando a paginação.');
+        }
         hasNextPage = false;
       }
     }
@@ -176,12 +252,15 @@ export class ScraperService implements OnModuleDestroy {
     this.logger.log(`Total de links de filmes coletados: ${movieLinks.length}`);
     return movieLinks;
   }
+  
 
   private async scrapeMoviePage(
     browser: Browser,
     movieLink: string,
   ): Promise<MoviePageData> {
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(120000);
+
     this.logger.log(`Raspando detalhes de: ${movieLink}`);
     await page.goto(movieLink, { waitUntil: 'networkidle2' });
 
@@ -194,7 +273,7 @@ export class ScraperService implements OnModuleDestroy {
         director: query(s.moviePage.director),
         synopsis: query(s.moviePage.synopsis),
         posterImage: query(s.moviePage.posterImage),
-        releaseDate:
+        releaseYear:
           document.querySelector(s.moviePage.releaseYear)?.textContent || null,
       };
 
@@ -230,43 +309,8 @@ export class ScraperService implements OnModuleDestroy {
     return pageData;
   }
 
-  // async scrapeMovieDetails(movieLink: string): Promise<any> {
-  //   const browser = await puppeteer.launch();
-  //   const page = await browser.newPage();
-
-  //   console.log(`Navegando para a página do filme: ${movieLink}`);
-  //   await page.goto(movieLink, { waitUntil: 'domcontentloaded' });
-
-  //   const movieDetails = await page.evaluate(() => {
-  //     const title =
-  //       document
-  //         .querySelector('meta[property="og:title"]')
-  //         ?.getAttribute('content') || '';
-  //     const releaseDate =
-  //       document.querySelector('span#film-release-date')?.textContent || '';
-  //     const director =
-  //       document
-  //         .querySelector('meta[name="twitter:data1"]')
-  //         ?.getAttribute('content') || '';
-  //     const synopsis =
-  //       document
-  //         .querySelector('meta[name="description"]')
-  //         ?.getAttribute('content') || '';
-  //     const posterImage =
-  //       document
-  //         .querySelector('meta[property="og:image"]')
-  //         ?.getAttribute('content') || '';
-
-  //     return { title, releaseDate, director, synopsis, posterImage };
-  //   });
-
-  //   console.log(`Detalhes do filme coletados: ${movieDetails.title}`);
-  //   await browser.close();
-  //   return movieDetails;
-  // }
-
-  extractSlugFromUrl(url: string): string | null {
-    const match = url.match(/letterboxd\.com\/film\/([^\/]+)\//);
+  private extractSlugFromUrl(url: string): string | null {
+    const match = url.match(/letterboxd\.com\/film\/([^\/]+)/);
     return match ? match[1] : null;
   }
 }
