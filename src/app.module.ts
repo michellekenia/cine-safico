@@ -6,9 +6,10 @@ import { MovieModule } from './movie/movie.module';
 import { ScraperService } from './scraper/scraper.service';
 import { ScraperController } from './scraper/scraper.controller';
 import { ScraperModule } from './scraper/scraper.module';
+import { TranslateModule } from './translate/translate.module';
 
 @Module({
-  imports: [PrismaModule, MovieModule, ScraperModule],
+  imports: [PrismaModule, MovieModule, ScraperModule, TranslateModule],
   controllers: [AppController, ScraperController],
   providers: [AppService, ScraperService],
 })

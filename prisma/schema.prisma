@@ -23,7 +23,8 @@ model ScrapedMovie {
   title       String
   releaseDate String?
   director    String?
-  synopsis    String?  @db.Text
+  synopsisEn    String?  @db.Text
+  synopsisPt    String?  @db.Text
   posterImage String?  @db.Text
   scrapedAt   DateTime @default(now())
 

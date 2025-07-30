@@ -160,7 +160,7 @@ export class ScraperService implements OnModuleDestroy {
               title: details.title,
               releaseDate: details.releaseYear,
               director: details.director,
-              synopsis: details.synopsis,
+              synopsisEn: details.synopsis,
               posterImage: details.posterImage,
               streamingServices: {
                 create: streaming,
@@ -312,5 +312,5 @@ export class ScraperService implements OnModuleDestroy {
   private extractSlugFromUrl(url: string): string | null {
     const match = url.match(/letterboxd\.com\/film\/([^\/]+)/);
     return match ? match[1] : null;
-  }
+  } 
 }
