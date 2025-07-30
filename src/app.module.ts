@@ -7,9 +7,10 @@ import { ScraperService } from './scraper/scraper.service';
 import { ScraperController } from './scraper/scraper.controller';
 import { ScraperModule } from './scraper/scraper.module';
 import { TranslateModule } from './translate/translate.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
-  imports: [PrismaModule, MovieModule, ScraperModule, TranslateModule],
+  imports: [PrismaModule, MovieModule, ScraperModule, TranslateModule, ScheduleModule.forRoot()],
   controllers: [AppController, ScraperController],
   providers: [AppService, ScraperService],
 })

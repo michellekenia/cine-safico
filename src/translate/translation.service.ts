@@ -16,6 +16,7 @@ export class TranslationService {
   async translatePendingSynopses(): Promise<number> {
     let totalTraduzidas = 0;
     while (true) {
+
       //Buscar lote de até 10 filmes pendentes
       const movies: { id: string; synopsisEn: string | null }[] = await this.prisma.scrapedMovie.findMany({
         where: {
@@ -33,8 +34,10 @@ export class TranslationService {
       for (const movie of movies) {
         if (!movie.synopsisEn) continue;
         try {
+          
           //Traduzir
           const result = await translate(movie.synopsisEn, { to: 'pt' });
+
           //Salvar
           await this.prisma.scrapedMovie.update({
             where: { id: movie.id },
@@ -45,7 +48,8 @@ export class TranslationService {
         } catch (e) {
           this.logger.error(`Erro ao traduzir filme ID ${movie.id}: ${e.message}`);
         }
-        //Pausa consciente (2 segundos)
+
+        //Pausa de 2 segundos
         await new Promise(res => setTimeout(res, 2000));
       }
     }
