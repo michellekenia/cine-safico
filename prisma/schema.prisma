@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,18 +12,29 @@ model Movie {
   title             String
   releaseDate       DateTime? @map("release_date")
   director          String
-  synopsis          String?   @db.Text @map("synopsis")
-  streamingPlatform String?   @db.VarChar(255) @map("streaming_platform")
+  synopsis          String?   @map("synopsis") @db.Text
+  streamingPlatform String?   @map("streaming_platform") @db.VarChar(255)
   posterImage       String?   @map("poster_image")
 }
 
 model ScrapedMovie {
-  id           Int      @id @default(autoincrement())
-  title        String
-  releaseDate  String?
-  director     String?
-  synopsis     String?
-  posterImage  String?
-  slug         String   @unique
-  scrapedAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  releaseDate String?
+  director    String?
+  synopsisEn    String?  @db.Text
+  synopsisPt    String?  @db.Text
+  posterImage String?  @db.Text
+  scrapedAt   DateTime @default(now())
+
+  streamingServices StreamingService[]
+}
+
+model StreamingService {
+  id             String       @id @default(cuid())
+  service        String
+  link           String       @db.Text
+  scrapedMovie   ScrapedMovie @relation(fields: [scrapedMovieId], references: [id], onDelete: Cascade)
+  scrapedMovieId String
 }
