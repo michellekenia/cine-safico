@@ -120,6 +120,12 @@ export class ScraperService implements OnModuleDestroy {
       this.browser = await puppeteer.launch({
         headless: true,
         timeout: 120000,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--single-process'
+        ],
       });
 
       const existingSlugs = new Set(
