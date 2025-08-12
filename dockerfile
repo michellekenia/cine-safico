@@ -53,7 +53,12 @@ COPY --from=builder /app/prisma ./prisma
 
 # Expõe a porta que a aplicação vai usar (a Render gerencia isso automaticamente)
 # A porta é definida pela variável de ambiente PORT
-EXPOSE 3000
+# Define um argumento de build para a porta, com 10000 como padrão (o valor do Render)
+ARG PORT=10000
+# Define a variável de ambiente dentro do contêiner
+ENV PORT=${PORT}
+# Expõe a porta definida pela variável de ambiente
+EXPOSE ${PORT}
 
 # O usuário padrão do Node.js é não-root, o que é uma boa prática de segurança
 USER node
