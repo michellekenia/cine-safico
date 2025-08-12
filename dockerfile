@@ -59,4 +59,4 @@ EXPOSE 3000
 USER node
 
 # Comando para iniciar a aplicação
-CMD [ "node", "dist/main.js" ]
+CMD [ "sh", "-c", "npx prisma migrate deploy && node dist/main.js" ]
