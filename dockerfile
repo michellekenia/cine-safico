@@ -1,85 +1,69 @@
 # ========================
 # 1️⃣ Stage de build
 # ========================
-FROM node:18-alpine AS builder
+FROM node:18-bullseye AS builder
 
-# Diretório de trabalho
 WORKDIR /app
 
-# Copiar arquivos essenciais primeiro (para cache eficiente)
+# Copiar arquivos essenciais primeiro
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar dependências de desenvolvimento (incluindo Nest CLI)
+# Instalar dependências de desenvolvimento
 RUN npm install
 
-# Adicionar binaryTargets corretos no prisma
+# Gerar Prisma client
 RUN npx prisma generate
 
-# Copiar restante do código
+# Copiar código e fazer build
 COPY . .
-
-# Compilar a aplicação NestJS
 RUN npm run build
 
 # ========================
 # 2️⃣ Stage final (produção)
 # ========================
-FROM node:18-alpine AS production
+FROM node:18-bullseye-slim AS production
 
 WORKDIR /app
 
-# Definir NODE_ENV para produção
 ENV NODE_ENV=production
 
-# Instalar dependências do Chromium de forma mais completa
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    ttf-dejavu \
-    ttf-droid \
-    ttf-liberation \
-    udev \
-    xvfb \
-    && rm -rf /var/cache/apk/*
+# Instalar dependências do sistema para Chrome/Chromium
+RUN apt-get update \
+    && apt-get install -y wget gnupg \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
+      --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
-# Criar usuário não-root para segurança
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
-
-# Definir variáveis de ambiente para Puppeteer e Chromium
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# Definir variáveis de ambiente para Puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV DISPLAY=:99
+ENV PUPPETEER_EXECUTABLE_PATH=google-chrome-stable
 
-# Copiar arquivos essenciais
+# Copiar arquivos de dependência
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar apenas dependências de produção
+# Instalar dependências de produção
 RUN npm install --only=production
 
-# Regenerar Prisma Client já no ambiente final
+# Gerar Prisma client para produção
 RUN npx prisma generate
 
-# Copiar build da stage de build
+# Copiar build
 COPY --from=builder /app/dist ./dist
 
-# Criar diretórios necessários com permissões corretas
-RUN mkdir -p /app/tmp && \
-    chown -R nextjs:nodejs /app && \
-    chmod -R 755 /app
+# Criar usuário não-root
+RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
+    && mkdir -p /home/pptruser/Downloads \
+    && chown -R pptruser:pptruser /home/pptruser \
+    && chown -R pptruser:pptruser /app
 
 # Mudar para usuário não-root
-USER nextjs
+USER pptruser
 
-# Expor porta do NestJS
 EXPOSE 3000
 
-# Script de inicialização com Xvfb para ambiente headless
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1024x768x24 -nolisten tcp & node dist/main.js"]
+CMD ["node", "dist/main.js"]
