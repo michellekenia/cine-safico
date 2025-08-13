@@ -41,6 +41,18 @@ RUN apt-get update && apt-get install -yq \
     libxi6 libxrandr2 libxrender1 libxss1 libxtst6 ca-certificates fonts-liberation \
     libappindicator1 libnss3 lsb-release xdg-utils wget --no-install-recommends
 
+# --- INÍCIO DOS COMANDOS DE DIAGNÓSTICO ---
+RUN echo "================================================="
+RUN echo "Buscando o executável do Google Chrome..."
+RUN echo "--- Tentativa com 'which':"
+RUN which google-chrome-stable || echo "COMANDO 'which google-chrome-stable' NÃO ENCONTROU."
+RUN which google-chrome || echo "COMANDO 'which google-chrome' NÃO ENCONTROU."
+RUN echo "--- Verificando diretórios comuns:"
+RUN ls -la /usr/bin | grep chrome || echo "Nenhum 'chrome' encontrado em /usr/bin"
+RUN ls -la /opt/google/chrome || echo "Diretório /opt/google/chrome não encontrado"
+RUN echo "================================================="
+# --- FIM DOS COMANDOS DE DIAGNÓSTICO ---
+
 # Copia apenas os arquivos de dependência de produção
 COPY --from=builder /app/package*.json ./
 
