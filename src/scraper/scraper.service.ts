@@ -118,6 +118,7 @@ export class ScraperService implements OnModuleDestroy {
 
     try {
       this.browser = await puppeteer.launch({
+        executablePath: '/usr/bin/google-chrome-stable',
         headless: true,
         timeout: 120000,
         args: [
