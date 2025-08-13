@@ -64,4 +64,4 @@ EXPOSE ${PORT}
 USER node
 
 # Comando para iniciar a aplicação
-CMD [ "sh", "-c", "npx prisma migrate deploy && node dist/main.js" ]
+CMD [ "node", "dist/main.js" ]
