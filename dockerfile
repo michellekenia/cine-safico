@@ -1,48 +1,52 @@
-# -------- STAGE 1: BUILDER (compila o projeto e gera Prisma Client) --------
-FROM node:18-slim AS builder
+# ========================
+# 1️⃣ Stage de build
+# ========================
+FROM node:18-alpine AS builder
 
+# Diretório de trabalho
 WORKDIR /app
 
-# Copia manifestos e instala TODAS as deps (inclui devDependencies)
+# Copiar arquivos essenciais primeiro (para cache eficiente)
 COPY package*.json ./
-RUN npm ci
+COPY prisma ./prisma/
 
-# Copia schema do Prisma antes para permitir o generate
-COPY prisma ./prisma
+# Instalar dependências de desenvolvimento (incluindo Nest CLI)
+RUN npm install
+
+# Adicionar binaryTargets corretos no prisma (garantido pelo schema.prisma)
 RUN npx prisma generate
 
-# Copia o restante do código e builda
+# Copiar restante do código
 COPY . .
+
+# Compilar a aplicação NestJS
 RUN npm run build
 
-# Remove devDependencies deixando node_modules pronto para produção (com Client gerado)
-RUN npm prune --omit=dev
-
-
-# -------- STAGE 2: RUNNER (somente runtime + Chrome) --------
-FROM node:18-slim AS runner
-
-# Instala Google Chrome para o scraping
-RUN apt-get update \
-    && apt-get install -y wget gnupg \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list' \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# ========================
+# 2️⃣ Stage final (produção)
+# ========================
+FROM node:18-alpine AS production
 
 WORKDIR /app
 
+# Definir NODE_ENV para produção
 ENV NODE_ENV=production
-# NÃO fixe PORT aqui — o Render injeta PORT dinamicamente
-# EXPOSE é apenas informativo; o Render detecta a porta pelo listen do app
+
+# Copiar arquivos essenciais
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Instalar apenas dependências de produção
+RUN npm install --only=production
+
+# Regenerar Prisma Client já no ambiente final (binário certo para o Render)
+RUN npx prisma generate
+
+# Copiar build da stage de build
+COPY --from=builder /app/dist ./dist
+
+# Expor porta do NestJS
 EXPOSE 3000
 
-# Copia artefatos do builder
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-
-# Sobe a API
+# Iniciar aplicação
 CMD ["node", "dist/main.js"]
