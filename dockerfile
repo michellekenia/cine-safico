@@ -50,6 +50,7 @@ RUN npm install --omit=dev
 # Copia os artefatos do build e os arquivos necessários do estágio "builder"
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma/client ./node_modules/.prisma/client
 
 # Expõe a porta que a aplicação vai usar (a Render gerencia isso automaticamente)
 # A porta é definida pela variável de ambiente PORT
