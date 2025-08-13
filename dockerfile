@@ -1,7 +1,7 @@
 # 1. Imagem Base
 FROM node:18-slim
 
-# 2. Instalação do Google Chrome
+# 2. Instalação do Google Chrome (se necessário para scraping)
 RUN apt-get update \
     && apt-get install -y wget gnupg \
     && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
@@ -10,23 +10,22 @@ RUN apt-get update \
     && apt-get install -y google-chrome-stable --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
+# 3. Define diretório de trabalho
 WORKDIR /app
 
+# 4. Copia package.json e instala dependências
 COPY package*.json ./
 RUN npm install
 
+# 5. Copia código da aplicação
 COPY . .
 
+# 6. Gera o Prisma Client e builda a aplicação
 RUN npx prisma generate
 RUN npm run build
 
-# Configura e expõe a porta para o Render
-ARG PORT=10000
-ENV PORT=${PORT}
-EXPOSE ${PORT}
+# 7. Expõe a porta usada pelo Render
+EXPOSE 3000
 
-USER node
-
-# Comando de Início: Extremamente simples, apenas inicia a aplicação.
-# A própria aplicação agora cuidará da migração.
-CMD [ "node", "dist/main.js" ]
+# 8. Inicia a aplicação já rodando a migração
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
