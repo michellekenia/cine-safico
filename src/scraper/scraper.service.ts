@@ -120,13 +120,21 @@ export class ScraperService implements OnModuleDestroy {
       this.browser = await puppeteer.launch({
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
         headless: true,
-        timeout: 120000,
+        timeout: 60000,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
-          '--single-process',
           '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--memory-pressure-off',
+          '--max_old_space_size=4096',
+          '--single-process',
+          '--no-zygote',
         ],
       });
 
