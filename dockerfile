@@ -32,6 +32,18 @@ WORKDIR /app
 # Definir NODE_ENV para produção
 ENV NODE_ENV=production
 
+# Instalar dependências do Chrome
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Definir variável de ambiente para Puppeteer
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Copiar arquivos essenciais
 COPY package*.json ./
 COPY prisma ./prisma/
