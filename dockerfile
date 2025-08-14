@@ -40,7 +40,7 @@ RUN apt-get update \
 
 # Definir variáveis de ambiente para Puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=google-chrome-stable
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 # Copiar arquivos de dependência
 COPY package*.json ./
