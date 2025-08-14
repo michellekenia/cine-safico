@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import * as puppeteer from 'puppeteer';
-import { Browser } from 'puppeteer';
+import * as puppeteer from 'puppeteer-core';
+import { Browser } from 'puppeteer-core';
 import { PrismaService } from 'src/adapters/prisma.service';
 import { ScrapedMovie } from '@prisma/client';
-import { Page } from 'puppeteer';
+import { Page } from 'puppeteer-core';
 
 interface MovieDetails {
   title: string | null;
@@ -118,7 +118,7 @@ export class ScraperService implements OnModuleDestroy {
 
     try {
       this.browser = await puppeteer.launch({
-        // executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+        executablePath: '/usr/bin/google-chrome-stable',
         headless: true,
         timeout: 60000,
         args: [
