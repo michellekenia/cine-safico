@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../adapters/prisma.service';
-import translate from 'google-translate-api-browser';
+// import translate from 'google-translate-api-browser';
+const translate = require('@iamtraction/google-translate');
 
 @Injectable()
 export class TranslationService {
