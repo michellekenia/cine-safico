@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import * as puppeteer from 'puppeteer';
-import { Browser } from 'puppeteer';
+import * as puppeteer from 'puppeteer-core';
+import { Browser } from 'puppeteer-core';
 import { PrismaService } from 'src/adapters/prisma.service';
 import { ScrapedMovie } from '@prisma/client';
-import { Page } from 'puppeteer';
+import { Page } from 'puppeteer-core';
 
 interface MovieDetails {
   title: string | null;
@@ -116,17 +116,34 @@ export class ScraperService implements OnModuleDestroy {
   async scrapeMovies(listLink: string): Promise<ScrapedMovie[]> {
     this.logger.log(`Iniciando processo de raspagem da lista: ${listLink}`);
 
+    const launchOptions: puppeteer.LaunchOptions = {
+      headless: true,
+      timeout: 120000,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--memory-pressure-off',
+        '--no-zygote',
+      ],
+    };
+
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    } else if (process.env.NODE_ENV === 'production') {
+      launchOptions.executablePath = '/usr/bin/google-chrome-stable';
+    } else {
+      launchOptions.channel = 'chrome';
+    }
+
     try {
-      this.browser = await puppeteer.launch({
-        headless: true,
-        timeout: 120000,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--single-process'
-        ],
-      });
+      this.browser = await puppeteer.launch(launchOptions);
 
       const existingSlugs = new Set(
         (
@@ -203,9 +220,10 @@ export class ScraperService implements OnModuleDestroy {
     }
   }
 
-
-
-  private async scrapeMovieLinks(browser: Browser, listLink: string): Promise<string[]> {
+  private async scrapeMovieLinks(
+    browser: Browser,
+    listLink: string,
+  ): Promise<string[]> {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(120000);
 
@@ -220,14 +238,18 @@ export class ScraperService implements OnModuleDestroy {
       this.logger.log(`Analisando página da lista: ${pageCount}...`);
       await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 60000 });
 
-      
-      this.logger.log('Iniciando scroll para carregar todos os filmes (lazy loading)...');
+      this.logger.log(
+        'Iniciando scroll para carregar todos os filmes (lazy loading)...',
+      );
       await autoScroll(page);
       this.logger.log('Scroll finalizado.');
 
-    
-      const linksOnPage = await page.evaluate((selector) =>
-        Array.from(document.querySelectorAll(selector), (el) => (el as HTMLAnchorElement).href),
+      const linksOnPage = await page.evaluate(
+        (selector) =>
+          Array.from(
+            document.querySelectorAll(selector),
+            (el) => (el as HTMLAnchorElement).href,
+          ),
         SELECTORS.list.movieFrame,
       );
       movieLinks.push(...linksOnPage);
@@ -236,19 +258,25 @@ export class ScraperService implements OnModuleDestroy {
       // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
       // remover '&& pageCount < 2' para a raspagem completa
-      if (nextButton && pageCount < 1) { 
-        this.logger.log(`Navegando da página ${pageCount} para a ${pageCount + 1}...`);
+      if (nextButton && pageCount < 1) {
+        this.logger.log(
+          `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
+        );
         await Promise.all([
           nextButton.click(),
           page.waitForNavigation({ waitUntil: 'networkidle2' }),
         ]);
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 2000 + Math.random() * 3000),
+        );
         pageCount++;
       } else {
         if (!nextButton) {
           this.logger.log('Não há mais páginas para navegar.');
         } else {
-          this.logger.log('Limite de 2 páginas atingido para o teste. Parando a paginação.');
+          this.logger.log(
+            'Limite de 2 páginas atingido para o teste. Parando a paginação.',
+          );
         }
         hasNextPage = false;
       }
@@ -258,7 +286,6 @@ export class ScraperService implements OnModuleDestroy {
     this.logger.log(`Total de links de filmes coletados: ${movieLinks.length}`);
     return movieLinks;
   }
-  
 
   private async scrapeMoviePage(
     browser: Browser,
@@ -318,5 +345,5 @@ export class ScraperService implements OnModuleDestroy {
   private extractSlugFromUrl(url: string): string | null {
     const match = url.match(/letterboxd\.com\/film\/([^\/]+)/);
     return match ? match[1] : null;
-  } 
+  }
 }

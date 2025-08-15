@@ -12,7 +12,14 @@ import { JobsModule } from './jobs/jobs.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PrismaModule, MovieModule, TranslateModule, JobsModule, ConfigModule, ScheduleModule.forRoot()],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    MovieModule,
+    TranslateModule,
+    JobsModule,
+    ScheduleModule.forRoot(),
+  ],
   controllers: [AppController, JobsController],
   providers: [AppService, ScraperService, TranslationService],
 })

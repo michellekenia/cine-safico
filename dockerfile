@@ -1,71 +1,66 @@
-# Use uma imagem oficial do Node.js como base. A versão 'slim' é mais leve.
-FROM node:18-slim
+# ========================
+# 1️⃣ Stage de build
+# ========================
+FROM node:18-bullseye AS builder
 
-# Instala as dependências do sistema operacional necessárias para o Chromium (Puppeteer)
-# Dentro do Docker, temos permissão para fazer isso!
-RUN apt-get update && apt-get install -yq \
-    gconf-service \
-    libasound2 \
-    libatk1.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgcc1 \
-    libgconf-2-4 \
-    libgdk-pixbuf2.0-0 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libstdc++6 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    ca-certificates \
-    fonts-liberation \
-    libappindicator1 \
-    libnss3 \
-    lsb-release \
-    xdg-utils \
-    wget \
-    --no-install-recommends
-
-# Define o diretório de trabalho dentro do contêiner
 WORKDIR /app
 
-# Copia os arquivos de dependência e instala os pacotes npm
-# Isso otimiza o cache de build do Docker
+# Copiar arquivos essenciais primeiro
 COPY package*.json ./
-RUN npm install
-
-# Copia o schema do Prisma para gerar o cliente
 COPY prisma ./prisma/
 
-# Gera o cliente Prisma para o ambiente Linux do contêiner
+# Instalar dependências de desenvolvimento
+RUN npm install
+
+# Gerar Prisma client
 RUN npx prisma generate
 
-# Copia o resto do código da sua aplicação
+# Copiar código e fazer build
 COPY . .
-
-# Faz o build da aplicação NestJS
 RUN npm run build
 
-# Expõe a porta que sua aplicação usa (ajuste se for diferente)
+# ========================
+# 2️⃣ Stage final (produção)
+# ========================
+FROM node:18-bullseye-slim AS production
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Instalar dependências do sistema para Chrome/Chromium
+RUN apt-get update \
+    && apt-get install -y wget gnupg \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
+      --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# Copiar arquivos de dependência
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Instalar dependências de produção
+RUN npm install --only=production
+
+# Gerar Prisma client para produção
+RUN npx prisma generate
+
+# Copiar build
+COPY --from=builder /app/dist ./dist
+
+# Criar usuário não-root
+RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
+    && mkdir -p /home/pptruser/Downloads \
+    && chown -R pptruser:pptruser /home/pptruser \
+    && chown -R pptruser:pptruser /app
+
+# Mudar para usuário não-root
+USER pptruser
+
 EXPOSE 3000
 
-# O comando para iniciar sua aplicação quando o contêiner rodar
-CMD [ "node", "dist/main" ]
+CMD ["node", "dist/main.js"]
