@@ -116,27 +116,34 @@ export class ScraperService implements OnModuleDestroy {
   async scrapeMovies(listLink: string): Promise<ScrapedMovie[]> {
     this.logger.log(`Iniciando processo de raspagem da lista: ${listLink}`);
 
+    const launchOptions: puppeteer.LaunchOptions = {
+      headless: true,
+      timeout: 120000,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--memory-pressure-off',
+        '--no-zygote',
+      ],
+    };
+
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    } else if (process.env.NODE_ENV === 'production') {
+      launchOptions.executablePath = '/usr/bin/google-chrome-stable';
+    } else {
+      launchOptions.channel = 'chrome';
+    }
+
     try {
-      this.browser = await puppeteer.launch({
-        executablePath: '/usr/bin/google-chrome-stable',
-        headless: true,
-        timeout: 60000,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-web-security',
-          '--disable-features=VizDisplayCompositor',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--memory-pressure-off',
-          '--max_old_space_size=4096',
-          '--single-process',
-          '--no-zygote',
-        ],
-      });
+      this.browser = await puppeteer.launch(launchOptions);
 
       const existingSlugs = new Set(
         (
