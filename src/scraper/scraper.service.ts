@@ -32,7 +32,7 @@ const SELECTORS = {
     title: 'meta[property="og:title"]',
     director: 'meta[name="twitter:data1"]',
     synopsis: 'meta[name="description"]',
-    posterImage: 'meta[property="og:image"]',
+    posterImageSrc: '.poster .film-poster img',
     releaseYear: 'a[href*="/year/"]',
     watchPanel: 'section.watch-panel .services',
     serviceItem: 'section.watch-panel .services p.service',
@@ -154,8 +154,8 @@ export class ScraperService implements OnModuleDestroy {
       const movieLinks = await this.scrapeMovieLinks(this.browser, listLink);
       const newMovies: ScrapedMovie[] = [];
 
-      for (const link of movieLinks) {
-        const slug = this.extractSlugFromUrl(link);
+      for (const { href, poster } of movieLinks) {
+        const slug = this.extractSlugFromUrl(href);
         if (!slug || existingSlugs.has(slug)) {
           if (slug)
             this.logger.log(`Filme já existe no banco, pulando: ${slug}`);
@@ -164,7 +164,7 @@ export class ScraperService implements OnModuleDestroy {
 
         try {
           const { details, streaming } = await scrapeWithRetries(
-            () => this.scrapeMoviePage(this.browser!, link),
+            () => this.scrapeMoviePage(this.browser!, href),
             3,
             this.logger,
             `filme ${slug}`,
@@ -172,10 +172,13 @@ export class ScraperService implements OnModuleDestroy {
 
           if (!details.title) {
             this.logger.warn(
-              `Título não encontrado para ${link}, pulando intencionalmente.`,
+              `Título não encontrado para ${href}, pulando intencionalmente.`,
             );
             continue;
           }
+
+          // Prioriza o poster da listagem, se disponível
+          const posterToSave = poster || details.posterImage;
 
           const savedMovie = await this.prisma.scrapedMovie.create({
             data: {
@@ -184,18 +187,18 @@ export class ScraperService implements OnModuleDestroy {
               releaseDate: details.releaseYear,
               director: details.director,
               synopsisEn: details.synopsis,
-              posterImage: details.posterImage,
+              posterImage: posterToSave,
               streamingServices: {
                 create: streaming,
               },
             },
           });
 
-          this.logger.log(`✅ Filme salvo: ${savedMovie.slug}`);
+          this.logger.log(`Filme salvo: ${savedMovie.slug} | Poster: ${posterToSave}`);
           newMovies.push(savedMovie);
         } catch (e) {
           this.logger.error(
-            `❌ Falha final ao processar ${link} após todas as tentativas: ${e.message}`,
+            `Falha final ao processar ${href} após todas as tentativas: ${e.message}`,
             e.stack,
           );
         }
@@ -223,14 +226,14 @@ export class ScraperService implements OnModuleDestroy {
   private async scrapeMovieLinks(
     browser: Browser,
     listLink: string,
-  ): Promise<string[]> {
+  ): Promise<Array<{ href: string; poster: string | null }>> {
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(120000);
 
     this.logger.log(`Navegando para a lista de filmes: ${listLink}`);
     await page.goto(listLink, { waitUntil: 'networkidle2' });
 
-    const movieLinks: string[] = [];
+    const movieLinks: { href: string; poster: string | null }[] = [];
     let hasNextPage = true;
     let pageCount = 1;
 
@@ -244,21 +247,31 @@ export class ScraperService implements OnModuleDestroy {
       await autoScroll(page);
       this.logger.log('Scroll finalizado.');
 
-      const linksOnPage = await page.evaluate(
-        (selector) =>
-          Array.from(
-            document.querySelectorAll(selector),
-            (el) => (el as HTMLAnchorElement).href,
-          ),
-        SELECTORS.list.movieFrame,
-      );
+      const linksOnPage = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('ul.poster-list li')).map((li) => {
+          const a = li.querySelector('a.frame');
+          const href = a ? (a as HTMLAnchorElement).href : null;
+          const img = li.querySelector('img');
+          let poster = null;
+          if (img) {
+            const srcset = img.getAttribute('srcset');
+            if (srcset) {
+              // Pega a última URL do srcset (maior resolução)
+              poster = srcset.split(',').pop()?.trim().split(' ')[0] || null;
+            } else {
+              poster = img.getAttribute('src');
+            }
+          }
+          return { href, poster };
+        });
+      });
       movieLinks.push(...linksOnPage);
-      this.logger.log(`Coletados ${linksOnPage.length} links nesta página.`);
+      this.logger.log(`Coletados ${linksOnPage.length} filmes nesta página.`);
 
       // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
-      // remover '&& pageCount < 2' para a raspagem completa
-      if (nextButton && pageCount < 1) {
+      // remover '&& pageCount < 1' para a raspagem completa
+      if (nextButton) {
         this.logger.log(
           `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
         );
@@ -271,19 +284,13 @@ export class ScraperService implements OnModuleDestroy {
         );
         pageCount++;
       } else {
-        if (!nextButton) {
-          this.logger.log('Não há mais páginas para navegar.');
-        } else {
-          this.logger.log(
-            'Limite de 2 páginas atingido para o teste. Parando a paginação.',
-          );
-        }
+        this.logger.log('Não há mais páginas para navegar.');
         hasNextPage = false;
       }
     }
 
     await page.close();
-    this.logger.log(`Total de links de filmes coletados: ${movieLinks.length}`);
+    this.logger.log(`Total de filmes coletados: ${movieLinks.length}`);
     return movieLinks;
   }
 
@@ -302,10 +309,24 @@ export class ScraperService implements OnModuleDestroy {
         document.querySelector(selector)?.getAttribute(attribute) || null;
 
       const details: MovieDetails = {
-        title: query(s.moviePage.title),
+        title: (() => {
+          const rawTitle = query(s.moviePage.title);
+          if (!rawTitle) return null;
+          // Remove o ano entre parênteses no final do título, ex: "Nome do Filme (2023)"
+          return rawTitle.replace(/\s*\(\d{4}\)$/, '').trim();
+        })(),
         director: query(s.moviePage.director),
         synopsis: query(s.moviePage.synopsis),
-        posterImage: query(s.moviePage.posterImage),
+        posterImage: (() => {
+          const img = document.querySelector(s.moviePage.posterImageSrc);
+          const srcset = img?.getAttribute('srcset');
+          if (srcset) {
+            // Pega a última URL do srcset (maior resolução)
+            return srcset.split(',').pop()?.trim().split(' ')[0] || null;
+          }
+          return img?.getAttribute('src') || null;
+        })(),
+        
         releaseYear:
           document.querySelector(s.moviePage.releaseYear)?.textContent || null,
       };
