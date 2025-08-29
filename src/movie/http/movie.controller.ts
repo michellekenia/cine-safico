@@ -1,8 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Injectable, ParseIntPipe } from '@nestjs/common';
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Body, 
+  Patch, 
+  Param, 
+  Delete, 
+  Injectable, 
+  ParseIntPipe, 
+  ValidationPipe, 
+  Query 
+} from '@nestjs/common';
 import { MovieService } from '../movie.service';
 import { CreateMovieDto } from '../dto/create-movie.dto';
 import { UpdateMovieDto } from '../dto/update-movie.dto';
 import { Movie } from 'src/core/domain/movie.model';
+import { FindAllMoviesDto } from '../dto/findAll-movies.dto';
 
 @Controller('movies')
 export class MovieController {
@@ -14,8 +27,14 @@ export class MovieController {
   }
 
   @Get()
-  async findAll(): Promise<Movie[]> {
-    return this.movieService.findAll()
+  async findPaginated(@Query(new ValidationPipe({ transform: true })) query: FindAllMoviesDto) {
+    
+    // Converte os parâmetros da query (que vêm como string) para números.
+    // Define valores padrão caso não sejam fornecidos.
+    const page = query.page ? parseInt(query.page, 10) : 1;
+    const pageSize = query.pageSize ? parseInt(query.pageSize, 10) : 20;
+
+    return this.movieService.findAllPaginated(page, pageSize, query.search);
   }
 
   @Get(':id')
