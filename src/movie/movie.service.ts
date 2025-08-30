@@ -1,16 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/adapters/prisma.service';
-import { Movie } from 'src/core/domain/movie.model';
-import { MovieRepositoryPort } from 'src/core/ports/movie-repository-port';
-import { CreateMovieDto } from './dto/create-movie.dto';
-import { UpdateMovieDto } from './dto/update-movie.dto';
+import { MovieRepository } from './movie.repository';
 
 /**
  * Define a estrutura para um resumo do filme, usado na listagem.
  */
 type MovieSummary = {
-  id: number;
+  id: string;
   slug: string;
   title: string;
   releaseDate: string | null;
@@ -30,18 +27,9 @@ type PaginatedResult<T> = {
 @Injectable()
 export class MovieService {
   constructor(
-    @Inject('MovieRepositoryPort')
-    private readonly movieRepository: MovieRepositoryPort,
+    private readonly movieRepository: MovieRepository,
     private readonly prisma: PrismaService,
   ) {}
-
-  async create(createMovieDto: CreateMovieDto): Promise<Movie> {
-    return this.movieRepository.create(createMovieDto);
-  }
-
-  async findAll(): Promise<Movie[]> {
-    return this.movieRepository.findAll()
-  }
 
   /**
    * Busca filmes de forma paginada, com opção de busca por título.
@@ -82,28 +70,21 @@ export class MovieService {
     ]);
 
     return {
-      data: movies.map(movie => ({
-        ...movie,
-        id: Number(movie.id),
-      })),
+      data: movies,
       total,
       currentPage: pageNumber,
       totalPages: Math.ceil(total / size),
     };
   }
 
-  async findById(id: number): Promise<Movie | null> {
-    return this.movieRepository.findById(id)
-  }
+  async findBySlug(slug: string) {
+    const movie = await this.movieRepository.findDetailsMovieBySlug(slug);
 
-  async update(id: number, updateMovieDto: UpdateMovieDto): Promise<Movie> {
-    return this.movieRepository.update(id, updateMovieDto)
+    if (!movie) {
+      throw new NotFoundException(`Filme com slug "${slug}" não encontrado.`);
+    }
+    return movie;
   }
-
-  async remove(id: number): Promise<void> {
-    return this.movieRepository.delete(id)
-  }
-
 
     /**
    * Constrói a cláusula 'where' para a consulta Prisma com base no termo de busca.
