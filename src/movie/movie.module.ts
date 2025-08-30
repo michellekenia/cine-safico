@@ -1,9 +1,9 @@
 import {  Module } from '@nestjs/common';
-import { MovieController } from './http/movie.controller';
+import { MovieController } from './movie.controller';
 import { MovieService } from './movie.service';
 import { PrismaModule } from 'src/adapters/prisma.module';
-import { PrismaMovieRepository } from './banco/prisma-movie-repository';
 import { PrismaService } from 'src/adapters/prisma.service';
+import { MovieRepository } from './movie.repository';
 
 
 @Module({
@@ -12,10 +12,7 @@ import { PrismaService } from 'src/adapters/prisma.service';
   providers: [
     MovieService,
     PrismaService,
-    {
-      provide: 'MovieRepositoryPort', 
-      useClass: PrismaMovieRepository,
-    },
+    MovieRepository,
    ]
 })
 export class MovieModule {}
