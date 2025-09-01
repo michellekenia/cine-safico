@@ -284,7 +284,7 @@ export class ScraperService implements OnModuleDestroy {
       // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
       // remover '&& pageCount < 1' para a raspagem completa
-      if (nextButton && pageCount < 1) {
+      if (nextButton) {
         this.logger.log(
           `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
         );
