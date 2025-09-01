@@ -13,6 +13,7 @@ interface MovieDetails {
   posterImage: string | null;
   duration: string | null;
   rating: string | null;
+  genres: string[];
 }
 
 interface StreamingInfo {
@@ -42,7 +43,8 @@ const SELECTORS = {
     serviceName: 'a.label .title .name',
     serviceLocale: 'a.label .title .locale',
     duration: 'p.text-link.text-footer',
-    rating: 'a.display-rating'
+    rating: 'a.display-rating',
+    genres: 'div.genres a'
   },
 };
 
@@ -275,7 +277,7 @@ export class ScraperService implements OnModuleDestroy {
       // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
       // remover '&& pageCount < 1' para a raspagem completa
-      if (nextButton && pageCount < 1) {
+      if (nextButton) {
         this.logger.log(
           `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
         );
@@ -347,6 +349,11 @@ export class ScraperService implements OnModuleDestroy {
           if (!el) return null;
           return el.textContent.trim();
         })(),
+
+        genres: Array.from(document.querySelectorAll('#tab-genres .text-sluglist.capitalize:nth-of-type(1) a.text-slug')).map(
+          (el) => el.textContent?.trim() || ''
+        )
+
       };
 
       const streaming: StreamingInfo[] = [];
@@ -389,6 +396,9 @@ export class ScraperService implements OnModuleDestroy {
     } else {
       this.logger.warn(`Rating NÃO encontrado para '${pageData.details.title}'.`);
     }
+    // LOG: Adicione esta linha para registrar apenas os gêneros
+    this.logger.log(`Gêneros do filme '${pageData.details.title}': ${pageData.details.genres.join(', ')}`);
+
 
     await page.close();
     return pageData;
