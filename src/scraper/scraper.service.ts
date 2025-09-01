@@ -11,6 +11,11 @@ interface MovieDetails {
   director: string | null;
   synopsis: string | null;
   posterImage: string | null;
+  duration: string | null;
+  rating: string | null;
+  genres: string[];
+  country: string[];
+  language: string[];
 }
 
 interface StreamingInfo {
@@ -39,6 +44,9 @@ const SELECTORS = {
     serviceLink: 'a.label',
     serviceName: 'a.label .title .name',
     serviceLocale: 'a.label .title .locale',
+    duration: 'p.text-link.text-footer',
+    rating: 'a.display-rating',
+    genres: 'div.genres a'
   },
 };
 
@@ -188,6 +196,11 @@ export class ScraperService implements OnModuleDestroy {
               director: details.director,
               synopsisEn: details.synopsis,
               posterImage: posterToSave,
+              duration: details.duration,
+              rating: details.rating,
+              genres: details.genres,
+              country: details.country,
+              language: details.language,
               streamingServices: {
                 create: streaming,
               },
@@ -329,6 +342,62 @@ export class ScraperService implements OnModuleDestroy {
         
         releaseYear:
           document.querySelector(s.moviePage.releaseYear)?.textContent || null,
+
+        duration: (() => {
+          const el = document.querySelector('p.text-link.text-footer');
+          if (!el) return null;
+          const raw = el.textContent.trim();
+          const match = raw.match(/(\d+\s*mins?)/);
+          return match ? match[1] : null;
+        })(),
+
+        rating: (() => {
+          const el = document.querySelector(s.moviePage.rating);
+          if (!el) return '0';
+          const value = el.textContent.trim();
+          return value ? value : '0';
+        })(),
+
+        genres: Array.from(document.querySelectorAll('#tab-genres .text-sluglist.capitalize:nth-of-type(1) a.text-slug')).map(
+          (el) => el.textContent?.trim() || ''
+        ),
+
+        //Country
+        country: (() => {
+          const detailsTab = document.querySelector('#tab-details');
+          let countries: string[] = [];
+          if (detailsTab) {
+            const h3s = Array.from(detailsTab.querySelectorAll('h3'));
+            for (const h3 of h3s) {
+              const h3Text = h3.textContent?.trim().toLowerCase();
+              if (h3Text === 'country' || h3Text === 'countries') {
+                const next = h3.nextElementSibling;
+                if (next && next.classList.contains('text-sluglist')) {
+                  countries = countries.concat(Array.from(next.querySelectorAll('a.text-slug')).map(el => el.textContent?.trim() || ''));
+                }
+              }
+            }
+          }
+          return countries;
+        })(),
+        //Language
+        language: (() => {
+          const detailsTab = document.querySelector('#tab-details');
+          let languages: string[] = [];
+          if (detailsTab) {
+            const h3s = Array.from(detailsTab.querySelectorAll('h3'));
+            for (const h3 of h3s) {
+              const h3Text = h3.textContent?.trim().toLowerCase();
+              if (h3Text === 'language' || h3Text === 'primary language') {
+                const next = h3.nextElementSibling;
+                if (next && next.classList.contains('text-sluglist')) {
+                  languages = languages.concat(Array.from(next.querySelectorAll('a.text-slug')).map(el => el.textContent?.trim() || ''));
+                }
+              }
+            }
+          }
+          return languages;
+        })(),
       };
 
       const streaming: StreamingInfo[] = [];
@@ -358,6 +427,25 @@ export class ScraperService implements OnModuleDestroy {
 
       return { details, streaming };
     }, SELECTORS);
+
+    //registrar a duração obtida
+    if (pageData.details.duration) {
+      this.logger.log(`Duração capturada para '${pageData.details.title}': ${pageData.details.duration}`);
+    } else {
+      this.logger.warn(`Duração NÃO encontrada para '${pageData.details.title}'.`);
+    }
+    //registrar o rating obtido
+    if (pageData.details.rating) {
+      this.logger.log(`Rating capturado para '${pageData.details.title}': ${pageData.details.rating}`);
+    } else {
+      this.logger.warn(`Rating NÃO encontrado para '${pageData.details.title}'.`);
+    }
+    //registrar apenas os gêneros
+    this.logger.log(`Gêneros do filme '${pageData.details.title}': ${pageData.details.genres.join(', ')}`);
+    //registrar country e language
+    this.logger.log(`Country do filme '${pageData.details.title}': ${pageData.details.country.join(', ')}`);
+    this.logger.log(`Language do filme '${pageData.details.title}': ${pageData.details.language.join(', ')}`);
+
 
     await page.close();
     return pageData;

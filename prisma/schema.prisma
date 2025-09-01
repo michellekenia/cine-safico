@@ -8,16 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Movie {
-  id                Int       @id @default(autoincrement())
-  title             String
-  releaseDate       DateTime? @map("release_date")
-  director          String
-  synopsis          String?   @map("synopsis") @db.Text
-  streamingPlatform String?   @map("streaming_platform") @db.VarChar(255)
-  posterImage       String?   @map("poster_image")
-}
-
 model ScrapedMovie {
   id          String   @id @default(cuid())
   slug        String   @unique
@@ -27,6 +17,11 @@ model ScrapedMovie {
   synopsisEn    String?  @db.Text
   synopsisPt    String?  @db.Text
   posterImage String?  @db.Text
+  duration    String?
+  rating      String?
+  genres      String[]
+  country     String[]
+  language    String[]
   scrapedAt   DateTime @default(now())
 
   streamingServices StreamingService[]
