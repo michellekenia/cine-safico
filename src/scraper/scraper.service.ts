@@ -11,6 +11,8 @@ interface MovieDetails {
   director: string | null;
   synopsis: string | null;
   posterImage: string | null;
+  duration: string | null;
+  rating: string | null;
 }
 
 interface StreamingInfo {
@@ -39,6 +41,8 @@ const SELECTORS = {
     serviceLink: 'a.label',
     serviceName: 'a.label .title .name',
     serviceLocale: 'a.label .title .locale',
+    duration: 'p.text-link.text-footer',
+    rating: 'a.display-rating'
   },
 };
 
@@ -271,7 +275,7 @@ export class ScraperService implements OnModuleDestroy {
       // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
       // remover '&& pageCount < 1' para a raspagem completa
-      if (nextButton) {
+      if (nextButton && pageCount < 1) {
         this.logger.log(
           `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
         );
@@ -329,6 +333,20 @@ export class ScraperService implements OnModuleDestroy {
         
         releaseYear:
           document.querySelector(s.moviePage.releaseYear)?.textContent || null,
+
+        duration: (() => {
+          const el = document.querySelector('p.text-link.text-footer');
+          if (!el) return null;
+          const raw = el.textContent.trim();
+          const match = raw.match(/(\d+\s*mins?)/);
+          return match ? match[1] : null;
+        })(),
+
+        rating: (() => {
+          const el = document.querySelector(s.moviePage.rating);
+          if (!el) return null;
+          return el.textContent.trim();
+        })(),
       };
 
       const streaming: StreamingInfo[] = [];
@@ -358,6 +376,19 @@ export class ScraperService implements OnModuleDestroy {
 
       return { details, streaming };
     }, SELECTORS);
+
+    // LOG: Adicione esta linha para registrar a duração obtida
+    if (pageData.details.duration) {
+      this.logger.log(`Duração capturada para '${pageData.details.title}': ${pageData.details.duration}`);
+    } else {
+      this.logger.warn(`Duração NÃO encontrada para '${pageData.details.title}'.`);
+    }
+    // LOG: Adicione esta linha para registrar o rating obtido
+    if (pageData.details.rating) {
+      this.logger.log(`Rating capturado para '${pageData.details.title}': ${pageData.details.rating}`);
+    } else {
+      this.logger.warn(`Rating NÃO encontrado para '${pageData.details.title}'.`);
+    }
 
     await page.close();
     return pageData;
