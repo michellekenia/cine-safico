@@ -14,6 +14,8 @@ interface MovieDetails {
   duration: string | null;
   rating: string | null;
   genres: string[];
+  country: string[];
+  language: string[];
 }
 
 interface StreamingInfo {
@@ -194,6 +196,11 @@ export class ScraperService implements OnModuleDestroy {
               director: details.director,
               synopsisEn: details.synopsis,
               posterImage: posterToSave,
+              duration: details.duration,
+              rating: details.rating,
+              genres: details.genres,
+              country: details.country,
+              language: details.language,
               streamingServices: {
                 create: streaming,
               },
@@ -277,7 +284,7 @@ export class ScraperService implements OnModuleDestroy {
       // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
       // remover '&& pageCount < 1' para a raspagem completa
-      if (nextButton) {
+      if (nextButton && pageCount < 1) {
         this.logger.log(
           `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
         );
@@ -346,14 +353,51 @@ export class ScraperService implements OnModuleDestroy {
 
         rating: (() => {
           const el = document.querySelector(s.moviePage.rating);
-          if (!el) return null;
-          return el.textContent.trim();
+          if (!el) return '0';
+          const value = el.textContent.trim();
+          return value ? value : '0';
         })(),
 
         genres: Array.from(document.querySelectorAll('#tab-genres .text-sluglist.capitalize:nth-of-type(1) a.text-slug')).map(
           (el) => el.textContent?.trim() || ''
-        )
+        ),
 
+        // Country
+        country: (() => {
+          const detailsTab = document.querySelector('#tab-details');
+          let countries: string[] = [];
+          if (detailsTab) {
+            const h3s = Array.from(detailsTab.querySelectorAll('h3'));
+            for (const h3 of h3s) {
+              const h3Text = h3.textContent?.trim().toLowerCase();
+              if (h3Text === 'country' || h3Text === 'countries') {
+                const next = h3.nextElementSibling;
+                if (next && next.classList.contains('text-sluglist')) {
+                  countries = countries.concat(Array.from(next.querySelectorAll('a.text-slug')).map(el => el.textContent?.trim() || ''));
+                }
+              }
+            }
+          }
+          return countries;
+        })(),
+        // Language
+        language: (() => {
+          const detailsTab = document.querySelector('#tab-details');
+          let languages: string[] = [];
+          if (detailsTab) {
+            const h3s = Array.from(detailsTab.querySelectorAll('h3'));
+            for (const h3 of h3s) {
+              const h3Text = h3.textContent?.trim().toLowerCase();
+              if (h3Text === 'language' || h3Text === 'primary language') {
+                const next = h3.nextElementSibling;
+                if (next && next.classList.contains('text-sluglist')) {
+                  languages = languages.concat(Array.from(next.querySelectorAll('a.text-slug')).map(el => el.textContent?.trim() || ''));
+                }
+              }
+            }
+          }
+          return languages;
+        })(),
       };
 
       const streaming: StreamingInfo[] = [];
@@ -398,6 +442,9 @@ export class ScraperService implements OnModuleDestroy {
     }
     // LOG: Adicione esta linha para registrar apenas os gêneros
     this.logger.log(`Gêneros do filme '${pageData.details.title}': ${pageData.details.genres.join(', ')}`);
+    // LOG: Adicione esta linha para registrar country e language
+    this.logger.log(`Country do filme '${pageData.details.title}': ${pageData.details.country.join(', ')}`);
+    this.logger.log(`Language do filme '${pageData.details.title}': ${pageData.details.language.join(', ')}`);
 
 
     await page.close();
