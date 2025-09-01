@@ -362,7 +362,7 @@ export class ScraperService implements OnModuleDestroy {
           (el) => el.textContent?.trim() || ''
         ),
 
-        // Country
+        //Country
         country: (() => {
           const detailsTab = document.querySelector('#tab-details');
           let countries: string[] = [];
@@ -380,7 +380,7 @@ export class ScraperService implements OnModuleDestroy {
           }
           return countries;
         })(),
-        // Language
+        //Language
         language: (() => {
           const detailsTab = document.querySelector('#tab-details');
           let languages: string[] = [];
@@ -428,21 +428,21 @@ export class ScraperService implements OnModuleDestroy {
       return { details, streaming };
     }, SELECTORS);
 
-    // LOG: Adicione esta linha para registrar a duração obtida
+    //registrar a duração obtida
     if (pageData.details.duration) {
       this.logger.log(`Duração capturada para '${pageData.details.title}': ${pageData.details.duration}`);
     } else {
       this.logger.warn(`Duração NÃO encontrada para '${pageData.details.title}'.`);
     }
-    // LOG: Adicione esta linha para registrar o rating obtido
+    //registrar o rating obtido
     if (pageData.details.rating) {
       this.logger.log(`Rating capturado para '${pageData.details.title}': ${pageData.details.rating}`);
     } else {
       this.logger.warn(`Rating NÃO encontrado para '${pageData.details.title}'.`);
     }
-    // LOG: Adicione esta linha para registrar apenas os gêneros
+    //registrar apenas os gêneros
     this.logger.log(`Gêneros do filme '${pageData.details.title}': ${pageData.details.genres.join(', ')}`);
-    // LOG: Adicione esta linha para registrar country e language
+    //registrar country e language
     this.logger.log(`Country do filme '${pageData.details.title}': ${pageData.details.country.join(', ')}`);
     this.logger.log(`Language do filme '${pageData.details.title}': ${pageData.details.language.join(', ')}`);
 
