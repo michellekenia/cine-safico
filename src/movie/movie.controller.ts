@@ -8,13 +8,11 @@ import {
 import { MovieService } from './movie.service';
 import { FindDetailsMovieDto } from './dto/findDetails.movies.dto';
 import { FindAllMoviesDto } from './dto/findAll.movies.dto';
-import { PrismaService } from 'src/adapters/prisma.service';
 
 @Controller('movies')
 export class MovieController {
   constructor(
     private readonly movieService: MovieService, 
-    private readonly prisma: PrismaService
   ) { }
 
   @Get()
@@ -23,6 +21,16 @@ export class MovieController {
     const pageSize = query.pageSize ? parseInt(query.pageSize, 10) : 20;
 
     return this.movieService.findAllPaginated(page, pageSize, query.search);
+  }
+
+  @Get('highlights')
+  async findTopRated() {
+   return this.movieService.findTopRated();
+  }
+
+  @Get('genres')
+  async findByGenres() {
+    return this.movieService.findMoviesByGenre();
   }
 
   @Get(':slug') 

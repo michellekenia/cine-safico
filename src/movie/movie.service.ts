@@ -103,4 +103,25 @@ export class MovieService {
     };
   }
 
+  async findTopRated() {
+  const topRatedMovies = await this.movieRepository.findTopRatedByLandingPage(5);
+
+    return topRatedMovies;
+  }
+  
+  async findMoviesByGenre() {
+  const numberOfMoviesPerGenre = 5;
+    const [horrorMovies, actionMovies, comedyMovies] = await Promise.all([
+      this.movieRepository.findManyByGenre('Horror', numberOfMoviesPerGenre),
+      this.movieRepository.findManyByGenre('Action', numberOfMoviesPerGenre),
+      this.movieRepository.findManyByGenre('Comedy', numberOfMoviesPerGenre),
+    ]);
+
+    return {
+      horror: horrorMovies,
+      action: actionMovies,
+      comedy: comedyMovies,
+    };
+
+  }
 }
