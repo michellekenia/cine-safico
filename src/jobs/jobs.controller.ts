@@ -41,7 +41,7 @@ export class JobsController {
       this.logger.warn('Job de Tradução está desabilitado. Nenhuma ação tomada.');
       throw new ForbiddenException('Translation job is currently disabled.');
     }
-    this.translationService.translatePendingSynopses();
+    this.translationService.translatePendingFields();
     this.logger.log('Job de Tradução disparado em segundo plano.');
     
     return { message: 'Translation job triggered successfully in the background.' };

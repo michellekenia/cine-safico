@@ -20,8 +20,11 @@ model ScrapedMovie {
   duration    String?
   rating      String?
   genres      String[]
+  genresPt    String[]
   country     String[]
+  countryPt   String[]
   language    String[]
+  languagePt  String[]
   scrapedAt   DateTime @default(now())
 
   streamingServices StreamingService[]
