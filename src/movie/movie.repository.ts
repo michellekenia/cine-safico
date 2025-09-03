@@ -2,9 +2,81 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/adapters/prisma.service';
 import { Prisma } from '@prisma/client';
 
+/**
+ * Define a estrutura para um resumo do filme, usado na listagem.
+ */
+type MovieSummary = {
+  id: string;
+  slug: string;
+  title: string;
+  releaseDate: string | null;
+  posterImage: string | null;
+};
+
+/**
+ * Define a estrutura para um resultado paginado genérico.
+ */
+type PaginatedResult<T> = {
+  data: T[];
+  total: number;
+  currentPage: number;
+  totalPages: number;
+};
+
+
 @Injectable()
 export class MovieRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async findAllPaginated(
+    page: number,
+    pageSize: number,
+    search?: string,
+  ): Promise<PaginatedResult<MovieSummary>> {
+    const pageNumber = Math.max(1, page);
+    const size = Math.max(1, pageSize);
+
+    const where = this.buildWhereClause(search);
+    const skip = (pageNumber - 1) * size;
+
+    const [movies, total] = await this.prisma.$transaction([
+      this.prisma.scrapedMovie.findMany({
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          releaseDate: true,
+          posterImage: true,
+        },
+        where,
+        orderBy: {
+          title: 'asc',
+        },
+        skip,
+        take: size,
+      }),
+      this.prisma.scrapedMovie.count({ where }),
+    ]);
+
+    return {
+      data: movies,
+      total,
+      currentPage: pageNumber,
+      totalPages: Math.ceil(total / size),
+    };
+  }
+
+  private buildWhereClause(search?: string): Prisma.ScrapedMovieWhereInput {
+    if (!search) {
+      return {};
+    }
+    return {
+      title: {
+        contains: search,
+        mode: 'insensitive',
+      },
+    };
+  }
 
   async findDetailsMovieBySlug(slug: string) {
     return this.prisma.scrapedMovie.findUnique({
