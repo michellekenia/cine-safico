@@ -98,10 +98,16 @@ export class TranslationService {
       }
       // Salvar atualizações
       if (Object.keys(updateData).length > 0) {
-        await this.prisma.scrapedMovie.update({
-          where: { id: movie.id },
-          data: updateData,
-        });
+        try {
+          await this.prisma.scrapedMovie.update({
+            where: { id: movie.id },
+            data: updateData,
+          });
+          this.logger.log(`Dados atualizados com sucesso para o filme ID ${movie.id}`);
+        } catch (error) {
+          this.logger.error(`Erro ao atualizar o filme ID ${movie.id} no banco: ${error.message}`);
+          // Continue para o próximo filme mesmo com erro de atualização
+        }
       }
       // Pausa de 2 segundos entre filmes
       await new Promise((res) => setTimeout(res, 2000));
