@@ -14,17 +14,17 @@ model ScrapedMovie {
   title       String
   releaseDate String?
   director    String?
-  synopsisEn    String?  @db.Text
-  synopsisPt    String?  @db.Text
+  synopsisEn  String?  @db.Text
+  synopsisPt  String?  @db.Text
   posterImage String?  @db.Text
   duration    String?
   rating      String?
   genres      String[]
-  genresPt    String[]
+  genresPt    String[] @default([])
   country     String[]
-  countryPt   String[]
+  countryPt   String[] @default([])
   language    String[]
-  languagePt  String[]
+  languagePt  String[] @default([])
   scrapedAt   DateTime @default(now())
 
   streamingServices StreamingService[]

@@ -57,7 +57,7 @@ export class TranslationService {
       // Traduzir country
       if (movie.country) {
         try {
-          updateData.countryPt = [];
+          updateData.countryPt = updateData.countryPt?.length ? updateData.countryPt : [];
           for (const c of movie.country) {
             const result = await translate(c, { to: 'pt' });
             updateData.countryPt.push(result.text);
@@ -71,10 +71,10 @@ export class TranslationService {
       // Traduzir language
       if (movie.language) {
         try {
-          updateData.languagePt = [];
+          updateData.languagePt = updateData.languagePt?.length ? updateData.languagePt : [];
           for (const l of movie.language) {
             const result = await translate(l, { to: 'pt' });
-            updateData.languagePt.push(result.text);
+            updateData.languagePt.push(result.text ?? '');
             this.logger.log(`Language traduzido: '${l}' -> '${result.text}' para o filme ID ${movie.id}`);
             await new Promise((res) => setTimeout(res, 500));
           }
@@ -85,7 +85,7 @@ export class TranslationService {
       // Traduzir genres
       if (movie.genres) {
         try {
-          updateData.genresPt = [];
+          updateData.genresPt = updateData.genresPt?.length ? updateData.genresPt : [];
           for (const g of movie.genres) {
             const result = await translate(g, { to: 'pt' });
             updateData.genresPt.push(result.text);
@@ -98,10 +98,16 @@ export class TranslationService {
       }
       // Salvar atualizações
       if (Object.keys(updateData).length > 0) {
-        await this.prisma.scrapedMovie.update({
-          where: { id: movie.id },
-          data: updateData,
-        });
+        try {
+          await this.prisma.scrapedMovie.update({
+            where: { id: movie.id },
+            data: updateData,
+          });
+          this.logger.log(`Dados atualizados com sucesso para o filme ID ${movie.id}`);
+        } catch (error) {
+          this.logger.error(`Erro ao atualizar o filme ID ${movie.id} no banco: ${error.message}`);
+          // Continue para o próximo filme mesmo com erro de atualização
+        }
       }
       // Pausa de 2 segundos entre filmes
       await new Promise((res) => setTimeout(res, 2000));

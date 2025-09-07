@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "ScrapedMovie" ALTER COLUMN "countryPt" SET DEFAULT ARRAY[]::TEXT[],
+ALTER COLUMN "genresPt" SET DEFAULT ARRAY[]::TEXT[],
+ALTER COLUMN "languagePt" SET DEFAULT ARRAY[]::TEXT[];
