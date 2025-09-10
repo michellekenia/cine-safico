@@ -1,4 +1,4 @@
-generator client {
+                                                                                generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
@@ -19,7 +19,7 @@ model ScrapedMovie {
   posterImage String?  @db.Text
   duration    String?
   rating      String?
-  genres      String[]
+  genres      Genre[]  
   genresPt    String[] @default([])
   country     String[]
   countryPt   String[] @default([])
@@ -28,6 +28,14 @@ model ScrapedMovie {
   scrapedAt   DateTime @default(now())
 
   streamingServices StreamingService[]
+}
+
+model Genre {
+  id     String         @id @default(cuid())
+  nome   String         @unique
+  nomePt String?        
+  slug   String         @unique
+  movies ScrapedMovie[]
 }
 
 model StreamingService {

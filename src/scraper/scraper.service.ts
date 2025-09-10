@@ -188,6 +188,13 @@ export class ScraperService implements OnModuleDestroy {
           // Prioriza o poster da listagem, se disponível
           const posterToSave = poster || details.posterImage;
 
+          // Log dos gêneros antes da criação para verificação
+          this.logger.log(`Gêneros a serem processados para ${slug}: ${JSON.stringify(details.genres)}`);
+          this.logger.log(`Gêneros com slugs normalizados:`);
+          details.genres.forEach(genreName => {
+            this.logger.log(`- ${genreName} => slug: ${this.createSlugFromName(genreName)}`);
+          });
+
           const savedMovie = await this.prisma.scrapedMovie.create({
             data: {
               slug,
@@ -198,7 +205,18 @@ export class ScraperService implements OnModuleDestroy {
               posterImage: posterToSave,
               duration: details.duration,
               rating: details.rating,
-              genres: details.genres,
+              // Usar connectOrCreate para gêneros (tabela relacional)
+              genres: {
+                connectOrCreate: details.genres.map(genreName => ({
+                  where: { slug: this.createSlugFromName(genreName) },
+                  create: { 
+                    nome: genreName,
+                    slug: this.createSlugFromName(genreName) 
+                  }
+                }))
+              },
+              // Manter genresPt como array para compatibilidade
+              genresPt: [],
               country: details.country,
               language: details.language,
               streamingServices: {
@@ -208,6 +226,20 @@ export class ScraperService implements OnModuleDestroy {
           });
 
           this.logger.log(`Filme salvo: ${savedMovie.slug} | Poster: ${posterToSave}`);
+          
+          // Verificar gêneros associados
+          const movieWithGenres = await this.prisma.scrapedMovie.findUnique({
+            where: { id: savedMovie.id },
+            include: { genres: true }
+          });
+          
+          if (movieWithGenres?.genres) {
+            this.logger.log(`Gêneros salvos para ${savedMovie.slug}:`);
+            movieWithGenres.genres.forEach(genre => {
+              this.logger.log(`- ${genre.nome} (${genre.slug})`);
+            });
+          }
+          
           newMovies.push(savedMovie);
         } catch (e) {
           this.logger.error(
@@ -284,7 +316,7 @@ export class ScraperService implements OnModuleDestroy {
       // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
       // remover '&& pageCount < 1' para a raspagem completa
-      if (nextButton) {
+      if (nextButton && pageCount < 1) {
         this.logger.log(
           `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
         );
@@ -454,5 +486,21 @@ export class ScraperService implements OnModuleDestroy {
   private extractSlugFromUrl(url: string): string | null {
     const match = url.match(/letterboxd\.com\/film\/([^\/]+)/);
     return match ? match[1] : null;
+  }
+
+  /**
+   * Cria um slug a partir de um nome de gênero.
+   * @param name O nome do gênero
+   * @returns Um slug normalizado
+   */
+  private createSlugFromName(name: string): string {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[^\w\s-]/g, '') // Remove caracteres especiais
+      .replace(/\s+/g, '-') // Substitui espaços por hífens
+      .replace(/--+/g, '-') // Remove hífens duplicados
+      .trim();
   }
 }
