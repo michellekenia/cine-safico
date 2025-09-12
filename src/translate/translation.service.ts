@@ -16,26 +16,31 @@ export class TranslationService {
   async translatePendingFields(): Promise<number> {
     let totalTraduzidas = 0;
 
-    // Buscar lote de até 10 filmes pendentes
-    const movies: { id: string; synopsisEn: string | null; country: string[]; language: string[]; genres: string[] }[] =
-      await this.prisma.scrapedMovie.findMany({
-        where: {
-          OR: [
-            { synopsisEn: { not: null }, synopsisPt: null },
-            { countryPt: {
-                    isEmpty: true
-                } },
-            { languagePt: {
-                    isEmpty: true
-                } },
-            { genresPt: {
-                    isEmpty: true
-                } },
-          ],
-        },
-        select: { id: true, synopsisEn: true, country: true, language: true, genres: true },
-        take: 10,
-      });
+    // 1. Primeiro traduz os gêneros que ainda não possuem tradução
+    await this.translateGenres();
+
+    // 2. Buscar lote de até 10 filmes pendentes
+    const movies = await this.prisma.scrapedMovie.findMany({
+      where: {
+        OR: [
+          { synopsisEn: { not: null }, synopsisPt: null },
+          { countryPt: {
+                  isEmpty: true
+              } },
+          { languagePt: {
+                  isEmpty: true
+              } },
+        ],
+      },
+      select: { 
+        id: true, 
+        synopsisEn: true, 
+        country: true, 
+        language: true,
+        genres: true
+      },
+      take: 10,
+    });
     if (movies.length === 0) {
       this.logger.log('Nenhum campo pendente para traduzir.');
       return 0;
@@ -82,21 +87,7 @@ export class TranslationService {
           this.logger.error(`Erro ao traduzir language do filme ID ${movie.id}: ${e.message}`);
         }
       }
-      // Traduzir genres
-      if (movie.genres) {
-        try {
-          updateData.genresPt = updateData.genresPt?.length ? updateData.genresPt : [];
-          for (const g of movie.genres) {
-            const result = await translate(g, { to: 'pt' });
-            updateData.genresPt.push(result.text);
-            this.logger.log(`Genre traduzido: '${g}' -> '${result.text}' para o filme ID ${movie.id}`);
-            await new Promise((res) => setTimeout(res, 500));
-          }
-        } catch (e) {
-          this.logger.error(`Erro ao traduzir genres do filme ID ${movie.id}: ${e.message}`);
-        }
-      }
-      // Salvar atualizações
+
       if (Object.keys(updateData).length > 0) {
         try {
           await this.prisma.scrapedMovie.update({
@@ -114,5 +105,55 @@ export class TranslationService {
     }
     this.logger.log(`Total de campos traduzidos nesta execução: ${totalTraduzidas}`);
     return totalTraduzidas;
+  }
+
+  /**
+   * Traduz os nomes dos gêneros que ainda não possuem tradução.
+   * Atualiza diretamente a tabela Genre, adicionando a tradução no campo nomePt.
+   */
+  async translateGenres(): Promise<number> {
+    let totalTraduzidos = 0;
+    
+    // Busca gêneros sem tradução
+    const generos = await this.prisma.genre.findMany({
+      where: {
+        nomePt: null
+      },
+      select: {
+        id: true,
+        nome: true
+      },
+      take: 20 // Limita para não sobrecarregar a API de tradução
+    });
+    
+    if (generos.length === 0) {
+      this.logger.log('Nenhum gênero pendente para tradução.');
+      return 0;
+    }
+    
+    this.logger.log(`Traduzindo ${generos.length} gêneros...`);
+    
+    for (const genero of generos) {
+      try {
+        const result = await translate(genero.nome, { to: 'pt' });
+        
+        // Atualiza o gênero com a tradução
+        await this.prisma.genre.update({
+          where: { id: genero.id },
+          data: { nomePt: result.text }
+        });
+        
+        this.logger.log(`Gênero traduzido: '${genero.nome}' -> '${result.text}'`);
+        totalTraduzidos++;
+        
+        // Aguarda um pouco para evitar exceder limites da API de tradução
+        await new Promise((res) => setTimeout(res, 500));
+      } catch (e) {
+        this.logger.error(`Erro ao traduzir gênero '${genero.nome}': ${e.message}`);
+      }
+    }
+    
+    this.logger.log(`Total de gêneros traduzidos: ${totalTraduzidos}`);
+    return totalTraduzidos;
   }
 }
