@@ -215,10 +215,26 @@ export class ScraperService implements OnModuleDestroy {
                   }
                 }))
               },
-              // Manter genresPt como array para compatibilidade
-              genresPt: [],
-              country: details.country,
-              language: details.language,
+              // Usar connectOrCreate para países (tabela relacional)
+              country: {
+                connectOrCreate: details.country.map(countryName => ({
+                  where: { slug: this.createSlugFromName(countryName) },
+                  create: {
+                    nome: countryName,
+                    slug: this.createSlugFromName(countryName)
+                  }
+                }))
+              },
+              // Usar connectOrCreate para idiomas (tabela relacional)
+              language: {
+                connectOrCreate: details.language.map(languageName => ({
+                  where: { slug: this.createSlugFromName(languageName) },
+                  create: {
+                    nome: languageName,
+                    slug: this.createSlugFromName(languageName)
+                  }
+                }))
+              },
               streamingServices: {
                 create: streaming,
               },
@@ -250,7 +266,7 @@ export class ScraperService implements OnModuleDestroy {
       }
 
       this.logger.log(
-        `🏁 Raspagem finalizada. Total de filmes novos: ${newMovies.length}`,
+        `Raspagem finalizada. Total de filmes novos: ${newMovies.length}`,
       );
       return newMovies;
     } catch (error) {
@@ -316,7 +332,7 @@ export class ScraperService implements OnModuleDestroy {
       // Lógica de paginação para o teste
       const nextButton = await page.$(SELECTORS.list.nextPageButton);
       // remover '&& pageCount < 1' para a raspagem completa
-      if (nextButton && pageCount < 1) {
+      if (nextButton) {
         this.logger.log(
           `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
         );
@@ -474,9 +490,35 @@ export class ScraperService implements OnModuleDestroy {
     }
     //registrar apenas os gêneros
     this.logger.log(`Gêneros do filme '${pageData.details.title}': ${pageData.details.genres.join(', ')}`);
+    
+    // Log detalhado de gêneros com slugs
+    if (pageData.details.genres.length > 0) {
+      this.logger.log('Detalhes dos gêneros:');
+      pageData.details.genres.forEach(genreName => {
+        this.logger.log(`- ${genreName} => slug: ${this.createSlugFromName(genreName)}`);
+      });
+    }
+    
     //registrar country e language
     this.logger.log(`Country do filme '${pageData.details.title}': ${pageData.details.country.join(', ')}`);
+    
+    // Log detalhado de países com slugs
+    if (pageData.details.country.length > 0) {
+      this.logger.log('Detalhes dos países:');
+      pageData.details.country.forEach(countryName => {
+        this.logger.log(`- ${countryName} => slug: ${this.createSlugFromName(countryName)}`);
+      });
+    }
+    
     this.logger.log(`Language do filme '${pageData.details.title}': ${pageData.details.language.join(', ')}`);
+    
+    // Log detalhado de idiomas com slugs
+    if (pageData.details.language.length > 0) {
+      this.logger.log('Detalhes dos idiomas:');
+      pageData.details.language.forEach(languageName => {
+        this.logger.log(`- ${languageName} => slug: ${this.createSlugFromName(languageName)}`);
+      });
+    }
 
 
     await page.close();
@@ -489,8 +531,9 @@ export class ScraperService implements OnModuleDestroy {
   }
 
   /**
-   * Cria um slug a partir de um nome de gênero.
-   * @param name O nome do gênero
+   * Cria um slug a partir de um nome.
+   * Usado para gêneros, países e idiomas.
+   * @param name O nome a ser convertido em slug
    * @returns Um slug normalizado
    */
   private createSlugFromName(name: string): string {

@@ -113,7 +113,9 @@ async findManyByGenre(genre: string, take: number) {
     return this.prisma.scrapedMovie.findMany({
       where: {
         genres: {
-          has: genre,
+          some: {
+            slug: genre,
+          },
         },
       },
       select: {

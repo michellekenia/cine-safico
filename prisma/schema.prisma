@@ -9,23 +9,20 @@ datasource db {
 }
 
 model ScrapedMovie {
-  id          String   @id @default(cuid())
-  slug        String   @unique
+  id          String     @id @default(cuid())
+  slug        String     @unique
   title       String
   releaseDate String?
   director    String?
-  synopsisEn  String?  @db.Text
-  synopsisPt  String?  @db.Text
-  posterImage String?  @db.Text
+  synopsisEn  String?    @db.Text
+  synopsisPt  String?    @db.Text
+  posterImage String?    @db.Text
   duration    String?
   rating      String?
-  genres      Genre[]  
-  genresPt    String[] @default([])
-  country     String[]
-  countryPt   String[] @default([])
-  language    String[]
-  languagePt  String[] @default([])
-  scrapedAt   DateTime @default(now())
+  genres      Genre[]
+  country     Country[]
+  language    Language[]
+  scrapedAt   DateTime   @default(now())
 
   streamingServices StreamingService[]
 }
@@ -33,7 +30,23 @@ model ScrapedMovie {
 model Genre {
   id     String         @id @default(cuid())
   nome   String         @unique
-  nomePt String?        
+  nomePt String?
+  slug   String         @unique
+  movies ScrapedMovie[]
+}
+
+model Country {
+  id     String         @id @default(cuid())
+  nome   String         @unique
+  nomePt String?
+  slug   String         @unique
+  movies ScrapedMovie[]
+}
+
+model Language {
+  id     String         @id @default(cuid())
+  nome   String         @unique
+  nomePt String?
   slug   String         @unique
   movies ScrapedMovie[]
 }
