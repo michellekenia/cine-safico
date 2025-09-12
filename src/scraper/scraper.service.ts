@@ -188,6 +188,13 @@ export class ScraperService implements OnModuleDestroy {
           // Prioriza o poster da listagem, se disponível
           const posterToSave = poster || details.posterImage;
 
+          // Log dos gêneros antes da criação para verificação
+          this.logger.log(`Gêneros a serem processados para ${slug}: ${JSON.stringify(details.genres)}`);
+          this.logger.log(`Gêneros com slugs normalizados:`);
+          details.genres.forEach(genreName => {
+            this.logger.log(`- ${genreName} => slug: ${this.createSlugFromName(genreName)}`);
+          });
+
           const savedMovie = await this.prisma.scrapedMovie.create({
             data: {
               slug,
@@ -198,9 +205,36 @@ export class ScraperService implements OnModuleDestroy {
               posterImage: posterToSave,
               duration: details.duration,
               rating: details.rating,
-              genres: details.genres,
-              country: details.country,
-              language: details.language,
+              // Usar connectOrCreate para gêneros (tabela relacional)
+              genres: {
+                connectOrCreate: details.genres.map(genreName => ({
+                  where: { slug: this.createSlugFromName(genreName) },
+                  create: { 
+                    nome: genreName,
+                    slug: this.createSlugFromName(genreName) 
+                  }
+                }))
+              },
+              // Usar connectOrCreate para países (tabela relacional)
+              country: {
+                connectOrCreate: details.country.map(countryName => ({
+                  where: { slug: this.createSlugFromName(countryName) },
+                  create: {
+                    nome: countryName,
+                    slug: this.createSlugFromName(countryName)
+                  }
+                }))
+              },
+              // Usar connectOrCreate para idiomas (tabela relacional)
+              language: {
+                connectOrCreate: details.language.map(languageName => ({
+                  where: { slug: this.createSlugFromName(languageName) },
+                  create: {
+                    nome: languageName,
+                    slug: this.createSlugFromName(languageName)
+                  }
+                }))
+              },
               streamingServices: {
                 create: streaming,
               },
@@ -208,6 +242,20 @@ export class ScraperService implements OnModuleDestroy {
           });
 
           this.logger.log(`Filme salvo: ${savedMovie.slug} | Poster: ${posterToSave}`);
+          
+          // Verificar gêneros associados
+          const movieWithGenres = await this.prisma.scrapedMovie.findUnique({
+            where: { id: savedMovie.id },
+            include: { genres: true }
+          });
+          
+          if (movieWithGenres?.genres) {
+            this.logger.log(`Gêneros salvos para ${savedMovie.slug}:`);
+            movieWithGenres.genres.forEach(genre => {
+              this.logger.log(`- ${genre.nome} (${genre.slug})`);
+            });
+          }
+          
           newMovies.push(savedMovie);
         } catch (e) {
           this.logger.error(
@@ -218,7 +266,7 @@ export class ScraperService implements OnModuleDestroy {
       }
 
       this.logger.log(
-        `🏁 Raspagem finalizada. Total de filmes novos: ${newMovies.length}`,
+        `Raspagem finalizada. Total de filmes novos: ${newMovies.length}`,
       );
       return newMovies;
     } catch (error) {
@@ -442,9 +490,35 @@ export class ScraperService implements OnModuleDestroy {
     }
     //registrar apenas os gêneros
     this.logger.log(`Gêneros do filme '${pageData.details.title}': ${pageData.details.genres.join(', ')}`);
+    
+    // Log detalhado de gêneros com slugs
+    if (pageData.details.genres.length > 0) {
+      this.logger.log('Detalhes dos gêneros:');
+      pageData.details.genres.forEach(genreName => {
+        this.logger.log(`- ${genreName} => slug: ${this.createSlugFromName(genreName)}`);
+      });
+    }
+    
     //registrar country e language
     this.logger.log(`Country do filme '${pageData.details.title}': ${pageData.details.country.join(', ')}`);
+    
+    // Log detalhado de países com slugs
+    if (pageData.details.country.length > 0) {
+      this.logger.log('Detalhes dos países:');
+      pageData.details.country.forEach(countryName => {
+        this.logger.log(`- ${countryName} => slug: ${this.createSlugFromName(countryName)}`);
+      });
+    }
+    
     this.logger.log(`Language do filme '${pageData.details.title}': ${pageData.details.language.join(', ')}`);
+    
+    // Log detalhado de idiomas com slugs
+    if (pageData.details.language.length > 0) {
+      this.logger.log('Detalhes dos idiomas:');
+      pageData.details.language.forEach(languageName => {
+        this.logger.log(`- ${languageName} => slug: ${this.createSlugFromName(languageName)}`);
+      });
+    }
 
 
     await page.close();
@@ -454,5 +528,22 @@ export class ScraperService implements OnModuleDestroy {
   private extractSlugFromUrl(url: string): string | null {
     const match = url.match(/letterboxd\.com\/film\/([^\/]+)/);
     return match ? match[1] : null;
+  }
+
+  /**
+   * Cria um slug a partir de um nome.
+   * Usado para gêneros, países e idiomas.
+   * @param name O nome a ser convertido em slug
+   * @returns Um slug normalizado
+   */
+  private createSlugFromName(name: string): string {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[^\w\s-]/g, '') // Remove caracteres especiais
+      .replace(/\s+/g, '-') // Substitui espaços por hífens
+      .replace(/--+/g, '-') // Remove hífens duplicados
+      .trim();
   }
 }
