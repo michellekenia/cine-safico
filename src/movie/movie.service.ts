@@ -49,19 +49,13 @@ export class MovieService {
     return topRatedMovies;
   }
   
-  async findMoviesByGenre() {
+  async findMoviesByGenre(
+    genre: string
+  ) {
     const numberOfMoviesPerGenre = 5;
-    const [horrorMovies, actionMovies, comedyMovies] = await Promise.all([
-      this.movieRepository.findManyByGenre('horror', numberOfMoviesPerGenre),
-      this.movieRepository.findManyByGenre('action', numberOfMoviesPerGenre),
-      this.movieRepository.findManyByGenre('comedy', numberOfMoviesPerGenre),
-    ]);
+    const movies = await this.movieRepository.findManyByGenre(genre, numberOfMoviesPerGenre);
+    return movies;
 
-    return {
-      horror: horrorMovies,
-      action: actionMovies,
-      comedy: comedyMovies,
-    };
   }
 
   // Métodos para acessar metadados

@@ -18,8 +18,8 @@ export class MovieController {
   // Buscas paginadas e filtráveis
   @Get()
   async findPaginated(@Query(new ValidationPipe({ transform: true })) query: FindAllMoviesDto) {
-    const page = query.page ? parseInt(query.page, 10) : 1;
-    const pageSize = query.pageSize ? parseInt(query.pageSize, 10) : 20;
+    const page = query.page ? parseInt(query.page) : 1;
+    const pageSize = query.pageSize ? parseInt(query.pageSize) : 24;
 
     return this.movieService.findAllPaginated(
       page, 
@@ -35,11 +35,6 @@ export class MovieController {
   @Get('highlights')
   async findTopRated() {
    return this.movieService.findTopRated();
-  }
-
-  @Get('genres')
-  async findByGenres() {
-    return this.movieService.findMoviesByGenre();
   }
 
   // Endpoints de metadados
@@ -61,17 +56,17 @@ export class MovieController {
   // Filtros por categoria
   @Get('by-genre/:slug')
   async findByGenre(@Param('slug') slug: string) {
-    return this.movieService.findMoviesByGenreSlug(slug, 10);
+    return this.movieService.findMoviesByGenreSlug(slug, 5);
   }
 
   @Get('by-country/:slug')
   async findByCountry(@Param('slug') slug: string) {
-    return this.movieService.findMoviesByCountrySlug(slug, 10);
+    return this.movieService.findMoviesByCountrySlug(slug, 5);
   }
 
   @Get('by-language/:slug')
   async findByLanguage(@Param('slug') slug: string) {
-    return this.movieService.findMoviesByLanguageSlug(slug, 10);
+    return this.movieService.findMoviesByLanguageSlug(slug, 5);
   }
 
   // Detalhes de um filme específico
