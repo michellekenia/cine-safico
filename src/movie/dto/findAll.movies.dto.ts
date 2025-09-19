@@ -1,4 +1,3 @@
-
 import { IsOptional, IsString } from 'class-validator';
 
 export class FindAllMoviesDto {
@@ -13,4 +12,16 @@ export class FindAllMoviesDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  genre?: string;
+
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
 }

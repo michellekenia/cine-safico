@@ -32,11 +32,14 @@ export class MovieRepository {
     page: number,
     pageSize: number,
     search?: string,
+    genreSlug?: string,
+    countrySlug?: string,
+    languageSlug?: string,
   ): Promise<PaginatedResult<MovieSummary>> {
     const pageNumber = Math.max(1, page);
     const size = Math.max(1, pageSize);
 
-    const where = this.buildWhereClause(search);
+    const where = this.buildWhereClause(search, genreSlug, countrySlug, languageSlug);
     const skip = (pageNumber - 1) * size;
 
     const [movies, total] = await this.prisma.$transaction([
@@ -66,16 +69,50 @@ export class MovieRepository {
     };
   }
 
-  private buildWhereClause(search?: string): Prisma.ScrapedMovieWhereInput {
-    if (!search) {
-      return {};
-    }
-    return {
-      title: {
+  private buildWhereClause(
+    search?: string, 
+    genreSlug?: string, 
+    countrySlug?: string, 
+    languageSlug?: string
+  ): Prisma.ScrapedMovieWhereInput {
+    const whereClause: Prisma.ScrapedMovieWhereInput = {};
+    
+    // Filtro por termo de busca
+    if (search) {
+      whereClause.title = {
         contains: search,
         mode: 'insensitive',
-      },
-    };
+      };
+    }
+    
+    // Filtro por gênero
+    if (genreSlug) {
+      whereClause.genres = {
+        some: {
+          slug: genreSlug,
+        },
+      };
+    }
+    
+    // Filtro por país
+    if (countrySlug) {
+      whereClause.country = {
+        some: {
+          slug: countrySlug,
+        },
+      };
+    }
+    
+    // Filtro por idioma
+    if (languageSlug) {
+      whereClause.language = {
+        some: {
+          slug: languageSlug,
+        },
+      };
+    }
+    
+    return whereClause;
   }
 
   async findDetailsMovieBySlug(slug: string) {
@@ -85,6 +122,9 @@ export class MovieRepository {
       },
       include: {
         streamingServices: true,
+        genres: true,
+        country: true,
+        language: true,
       },
     });
   }
@@ -132,4 +172,105 @@ async findManyByGenre(genre: string, take: number) {
     });
   }
 
+async findManyByCountry(country: string, take: number) {
+    return this.prisma.scrapedMovie.findMany({
+      where: {
+        country: {
+          some: {
+            slug: country,
+          },
+        },
+      },
+      select: {
+        slug: true,
+        title: true,
+        releaseDate: true,
+        rating: true,
+        posterImage: true,
+      },
+      orderBy: {
+        rating: 'desc',
+      },
+      take: take,
+    });
+  }
+
+  async findManyByLanguage(language: string, take: number) {
+    return this.prisma.scrapedMovie.findMany({
+      where: {
+        language: {
+          some: {
+            slug: language,
+          },
+        },
+      },
+      select: {
+        slug: true,
+        title: true,
+        releaseDate: true,
+        rating: true,
+        posterImage: true,
+      },
+      orderBy: {
+        rating: 'desc',
+      },
+      take: take,
+    });
+  }
+
+  // Métodos para buscar metadados (gêneros, países, idiomas)
+  
+  async findAllGenres() {
+    return this.prisma.genre.findMany({
+      select: {
+        slug: true,
+        nome: true,
+        nomePt: true,
+        _count: {
+          select: {
+            movies: true
+          }
+        }
+      },
+      orderBy: {
+        nome: 'asc',
+      },
+    });
+  }
+  
+  async findAllCountries() {
+    return this.prisma.country.findMany({
+      select: {
+        slug: true,
+        nome: true,
+        nomePt: true,
+        _count: {
+          select: {
+            movies: true
+          }
+        }
+      },
+      orderBy: {
+        nome: 'asc',
+      },
+    });
+  }
+  
+  async findAllLanguages() {
+    return this.prisma.language.findMany({
+      select: {
+        slug: true,
+        nome: true,
+        nomePt: true,
+        _count: {
+          select: {
+            movies: true
+          }
+        }
+      },
+      orderBy: {
+        nome: 'asc',
+      },
+    });
+  }
 }
