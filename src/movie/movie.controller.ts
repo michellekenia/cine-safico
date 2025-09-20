@@ -54,9 +54,9 @@ export class MovieController {
   }
 
   // Filtros por categoria
-  @Get('by-genre/:slug')
-  async findByGenre(@Param('slug') slug: string) {
-    return this.movieService.findMoviesByGenreSlug(slug, 5);
+  @Get('by-genre')
+  async findByGenre() {
+    return this.movieService.findMoviesByGenre(5);
   }
 
   @Get('by-country/:slug')

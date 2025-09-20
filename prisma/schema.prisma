@@ -28,11 +28,12 @@ model ScrapedMovie {
 }
 
 model Genre {
-  id     String         @id @default(cuid())
-  nome   String         @unique
-  nomePt String?
-  slug   String         @unique
-  movies ScrapedMovie[]
+  id         String         @id @default(cuid())
+  nome       String         @unique
+  nomePt     String?
+  slug       String         @unique
+  isFeatured Boolean        @default(false)
+  movies     ScrapedMovie[]
 }
 
 model Country {
