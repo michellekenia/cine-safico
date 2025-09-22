@@ -172,6 +172,21 @@ async findManyByGenre(genre: string, take: number) {
     });
   }
 
+  /**
+   * Busca no banco de dados todos os gêneros marcados como 'featured'.
+   */
+  async findFeaturedGenres() {
+    return this.prisma.genre.findMany({
+      where: {
+        isFeatured: true,
+      },
+      select: {
+        nome: true, // Alterar para pegar nome PT-BR
+        slug: true,
+      },
+    });
+  }
+
 async findManyByCountry(country: string, take: number) {
     return this.prisma.scrapedMovie.findMany({
       where: {

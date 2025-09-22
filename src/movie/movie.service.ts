@@ -1,13 +1,12 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/adapters/prisma.service';
 import { MovieRepository } from './movie.repository';
-import { MetadataItemDto, MetadataListResponseDto } from './dto/metadata.response.dto';
+import { MetadataListResponseDto } from './dto/metadata.response.dto';
 
 @Injectable()
 export class MovieService {
   private readonly logger = new Logger(MovieService.name);
-  
+
   constructor(
     private readonly movieRepository: MovieRepository,
     private readonly prisma: PrismaService,
@@ -21,17 +20,24 @@ export class MovieService {
     country?: string,
     language?: string,
   ) {
-    this.logger.log(`Buscando filmes paginados: página ${page}, tamanho ${pageSize}, filtros: ${JSON.stringify({
-      search, genre, country, language
-    })}`);
-    
+    this.logger.log(
+      `Buscando filmes paginados: página ${page}, tamanho ${pageSize}, filtros: ${JSON.stringify(
+        {
+          search,
+          genre,
+          country,
+          language,
+        },
+      )}`,
+    );
+
     return this.movieRepository.findAllPaginated(
-      page, 
-      pageSize, 
+      page,
+      pageSize,
       search,
       genre,
       country,
-      language
+      language,
     );
   }
 
@@ -43,19 +49,11 @@ export class MovieService {
     }
     return movie;
   }
-  
-  async findTopRated() {
-    const topRatedMovies = await this.movieRepository.findTopRatedByLandingPage(5);
-    return topRatedMovies;
-  }
-  
-  async findMoviesByGenre(
-    genre: string
-  ) {
-    const numberOfMoviesPerGenre = 5;
-    const movies = await this.movieRepository.findManyByGenre(genre, numberOfMoviesPerGenre);
-    return movies;
 
+  async findTopRated() {
+    const topRatedMovies =
+      await this.movieRepository.findTopRatedByLandingPage(5);
+    return topRatedMovies;
   }
 
   // Métodos para acessar metadados
@@ -63,66 +61,87 @@ export class MovieService {
   async findAllGenres(): Promise<MetadataListResponseDto> {
     this.logger.log('Buscando todos os gêneros');
     const genres = await this.movieRepository.findAllGenres();
-    
-    const items = genres.map(genre => ({
+
+    const items = genres.map((genre) => ({
       slug: genre.slug,
       nome: genre.nome,
       nomePt: genre.nomePt,
-      count: genre._count.movies
+      count: genre._count.movies,
     }));
-    
+
     return {
       items,
-      total: items.length
+      total: items.length,
     };
   }
-  
+
   async findAllCountries(): Promise<MetadataListResponseDto> {
     this.logger.log('Buscando todos os países');
     const countries = await this.movieRepository.findAllCountries();
-    
-    const items = countries.map(country => ({
+
+    const items = countries.map((country) => ({
       slug: country.slug,
       nome: country.nome,
       nomePt: country.nomePt,
-      count: country._count.movies
+      count: country._count.movies,
     }));
-    
+
     return {
       items,
-      total: items.length
+      total: items.length,
     };
   }
-  
+
   async findAllLanguages(): Promise<MetadataListResponseDto> {
     this.logger.log('Buscando todos os idiomas');
     const languages = await this.movieRepository.findAllLanguages();
-    
-    const items = languages.map(language => ({
+
+    const items = languages.map((language) => ({
       slug: language.slug,
       nome: language.nome,
       nomePt: language.nomePt,
-      count: language._count.movies
+      count: language._count.movies,
     }));
-    
+
     return {
       items,
-      total: items.length
+      total: items.length,
     };
   }
-  
-  async findMoviesByGenreSlug(genreSlug: string, limit: number) {
-    this.logger.log(`Buscando filmes por gênero: ${genreSlug}, limite: ${limit}`);
-    return this.movieRepository.findManyByGenre(genreSlug, limit);
+
+  async findMoviesByGenre(limit: number) {
+    this.logger.log('Buscando seções de filmes para a home page...');
+
+    const featuredGenres = await this.movieRepository.findFeaturedGenres();
+    if (!featuredGenres || featuredGenres.length === 0) {
+      return {};
+    }
+    const moviePromises = featuredGenres.map((genre) =>
+      this.movieRepository.findManyByGenre(genre.slug, 5),
+    );
+
+    const moviesByGenreArray = await Promise.all(moviePromises);
+
+    const response = {};
+    featuredGenres.forEach((genre, index) => {
+      const genreName = genre.nome || genre.slug; // Alterar para pegar nomePt
+      response[genreName] = moviesByGenreArray[index];
+    });
+
+    return response;
   }
 
   async findMoviesByCountrySlug(countrySlug: string, limit: number) {
-    this.logger.log(`Buscando filmes por país: ${countrySlug}, limite: ${limit}`);
+    this.logger.log(
+      `Buscando filmes por país: ${countrySlug}, limite: ${limit}`,
+    );
     return this.movieRepository.findManyByCountry(countrySlug, limit);
   }
 
   async findMoviesByLanguageSlug(languageSlug: string, limit: number) {
-    this.logger.log(`Buscando filmes por idioma: ${languageSlug}, limite: ${limit}`);
+    this.logger.log(
+      `Buscando filmes por idioma: ${languageSlug}, limite: ${limit}`,
+    );
     return this.movieRepository.findManyByLanguage(languageSlug, limit);
   }
 }
