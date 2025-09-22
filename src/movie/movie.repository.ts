@@ -181,7 +181,7 @@ async findManyByGenre(genre: string, take: number) {
         isFeatured: true,
       },
       select: {
-        nome: true, // Alterar para pegar nome PT-BR
+        nomePt: true,
         slug: true,
       },
     });

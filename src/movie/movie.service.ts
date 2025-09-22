@@ -124,7 +124,7 @@ export class MovieService {
 
     const response = {};
     featuredGenres.forEach((genre, index) => {
-      const genreName = genre.nome || genre.slug; // Alterar para pegar nomePt
+      const genreName = genre.nomePt || genre.slug;
       response[genreName] = moviesByGenreArray[index];
     });
 
