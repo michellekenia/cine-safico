@@ -48,6 +48,7 @@ export class MovieRepository {
           id: true,
           slug: true,
           title: true,
+          rating: true,
           releaseDate: true,
           posterImage: true,
         },
