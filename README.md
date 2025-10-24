@@ -257,30 +257,76 @@ Cada endpoint exposto segue o padrão NestJS, com separação clara entre as cam
 
 ```json
 {
-  "id": "clp0abc123xyz",
-  "slug": "portrait-of-a-lady-on-fire-2019",
-  "title": "Portrait of a Lady on Fire",
-  "releaseDate": "2019-09-18",
-  "director": "Céline Sciamma",
-  "synopsisEn": "In 18th century France, a young painter is commissioned to do the wedding portrait of a young woman.",
-  "synopsisPt": "Na França do século XVIII, uma jovem pintora é contratada para fazer o retrato de casamento de uma jovem.",
-  "posterImage": "https://image.tmdb.org/t/p/original/portrait.jpg",
-  "duration": "122 min",
-  "rating": 5,
-  "scrapedAt": "2023-10-01T12:00:00.000Z",
-  "genres": [
-    { "id": "g1", "nome": "Drama", "nomePt": "Drama", "slug": "drama" },
-    { "id": "g2", "nome": "Romance", "nomePt": "Romance", "slug": "romance" }
-  ],
-  "country": [
-    { "id": "c1", "nome": "France", "nomePt": "França", "slug": "france" }
-  ],
-  "language": [
-    { "id": "l1", "nome": "French", "nomePt": "Francês", "slug": "french" }
-  ],
-  "streamingServices": [
-    { "id": "s1", "service": "Amazon Prime Video", "link": "https://primevideo.com/portrait" }
-  ]
+	"id": "cmfhd0yzd008jia78zuudchhl",
+	"slug": "bound",
+	"title": "Bound",
+	"releaseDate": "1996",
+	"director": "Lilly Wachowski, Lana Wachowski",
+	"synopsisEn": "Corky, a tough female ex-convict working on an apartment renovation in a Chicago building, meets a couple living next door, Caesar, a paranoid mobster, and Violet, his seductive girlfriend, who is immediately attracted to her.",
+	"synopsisPt": "Corky, uma ex-presidência dura que trabalha em uma reforma de apartamentos em um prédio de Chicago, encontra um casal morando ao lado, César, um mafioso paranóico e Violet, sua namorada sedutora, que é imediatamente atraída por ela.",
+	"posterImage": "https://a.ltrbxd.com/resized/film-poster/4/7/2/8/9/47289-bound-0-250-0-375-crop.jpg?v=54e3ef63ae",
+	"duration": "105 mins",
+	"rating": "4.0",
+	"scrapedAt": "2025-09-12T21:39:10.490Z",
+	"streamingServices": [
+		{
+			"id": "cmfhd0yze008pia78o4ln07jg",
+			"service": "Apple TV",
+			"link": "https://tv.apple.com/br/movie/ligadas-pelo-desejo/umc.cmc.14h6ctfrpoaaiu4lbndk1pxcy?at=1000l3V2&ct=app_tv&itscg=30200&itsct=justwatch_tv_12&playableId=tvs.sbd.9001%3A950866823",
+			"scrapedMovieId": "cmfhd0yzd008jia78zuudchhl"
+		},
+		{
+			"id": "cmfhd0yze008qia788onczdbn",
+			"service": "Google Play Movies",
+			"link": "https://play.google.com/store/movies/details/Ligadas_Pelo_Desejo_LEG?gl=BR&hl=en&id=6vj1nD2jsEA",
+			"scrapedMovieId": "cmfhd0yzd008jia78zuudchhl"
+		},
+		{
+			"id": "cmfhd0yze008ria781lfcjobr",
+			"service": "Filmelier Plus Amazon Channel",
+			"link": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.62b6b512-41df-2f12-b201-f05526a8554b",
+			"scrapedMovieId": "cmfhd0yzd008jia78zuudchhl"
+		}
+	],
+	"genres": [
+		{
+			"id": "cmfhcwxrw0001ia78slnkxy5a",
+			"nome": "Drama",
+			"nomePt": "Drama",
+			"slug": "drama",
+			"isFeatured": false
+		},
+		{
+			"id": "cmfhcxd1h000qia782vxniof0",
+			"nome": "Thriller",
+			"nomePt": "Filme de ação",
+			"slug": "thriller",
+			"isFeatured": false
+		},
+		{
+			"id": "cmfhcxg9q0012ia78m7i4hu2z",
+			"nome": "Crime",
+			"nomePt": "Crime",
+			"slug": "crime",
+			"isFeatured": false
+		}
+	],
+	"country": [
+		{
+			"id": "cmfhcx6h5000hia78ofbc2b5p",
+			"nome": "USA",
+			"nomePt": "Estados Unidos",
+			"slug": "usa"
+		}
+	],
+	"language": [
+		{
+			"id": "cmfhcx20n000dia78n1uf4z1f",
+			"nome": "English",
+			"nomePt": "Inglês",
+			"slug": "english"
+		}
+	]
 }
 ```
 
