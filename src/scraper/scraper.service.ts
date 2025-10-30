@@ -185,8 +185,18 @@ export class ScraperService implements OnModuleDestroy {
             continue;
           }
 
-          // Prioriza o poster da listagem, se disponível
-          const posterToSave = poster || details.posterImage;
+          // Otimiza a URL do poster para maior resolução
+          let posterUrl = details.posterImage || poster;
+          if (posterUrl?.includes('ltrbxd.com/resized/film-poster')) {
+            const match = posterUrl.match(/(.*\/film-poster\/.*?)-\d+-\d+-\d+-\d+-crop\.jpg(.*)/);
+            if (match) {
+              const [, basePath, queryParams] = match;
+              // Usa as dimensões máximas observadas no site: 2000x3000
+              posterUrl = `${basePath}-0-2000-0-3000-crop.jpg${queryParams}`;
+              this.logger.log(`Poster otimizado para alta resolução: ${posterUrl}`);
+            }
+          }
+          const posterToSave = posterUrl;
 
           // Log dos gêneros antes da criação para verificação
           this.logger.log(`Gêneros a serem processados para ${slug}: ${JSON.stringify(details.genres)}`);
