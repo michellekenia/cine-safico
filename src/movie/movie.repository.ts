@@ -306,7 +306,6 @@ async findManyByCountry(country: string, take: number) {
       select: {
         slug: true,
         nome: true,
-        nomePt: true,
         categoria: true,
         isFeatured: true,
         _count: {

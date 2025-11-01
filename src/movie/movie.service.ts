@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/adapters/prisma.service';
 import { MovieRepository } from './movie.repository';
-import { MetadataListResponseDto } from './dto/metadata.response.dto';
+import { MetadataListResponseDto, PlatformListResponseDto } from './dto/metadata.response.dto';
 
 @Injectable()
 export class MovieService {
@@ -148,7 +148,7 @@ export class MovieService {
     return this.movieRepository.findManyByLanguage(languageSlug, limit);
   }
 
-  async findAllPlatforms(): Promise<MetadataListResponseDto> {
+  async findAllPlatforms(): Promise<PlatformListResponseDto> {
     this.logger.log('Buscando todas as plataformas com contagem de filmes...');
 
     const platforms = await this.movieRepository.findAllPlatforms();
@@ -156,7 +156,6 @@ export class MovieService {
     const items = platforms.map((platform) => ({
       slug: platform.slug,
       nome: platform.nome,
-      nomePt: platform.nomePt,
       count: platform._count.movies,
       categoria: platform.categoria,
       isFeatured: platform.isFeatured,

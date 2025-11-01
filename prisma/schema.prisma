@@ -65,7 +65,6 @@ model StreamingService {
 model StreamingPlatform {
   id          String   @id @default(cuid())
   nome        String   @unique
-  nomePt      String?
   slug        String   @unique
   categoria   String   // "principal", "brasileira", "nicho", "gratuita", "digital", "internacional"
   isFeatured  Boolean  @default(false)
