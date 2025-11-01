@@ -35,11 +35,12 @@ export class MovieRepository {
     genreSlug?: string,
     countrySlug?: string,
     languageSlug?: string,
+    platformSlug?: string,
   ): Promise<PaginatedResult<MovieSummary>> {
     const pageNumber = Math.max(1, page);
     const size = Math.max(1, pageSize);
 
-    const where = this.buildWhereClause(search, genreSlug, countrySlug, languageSlug);
+    const where = this.buildWhereClause(search, genreSlug, countrySlug, languageSlug, platformSlug);
     const skip = (pageNumber - 1) * size;
 
     const [movies, total] = await this.prisma.$transaction([
@@ -74,7 +75,8 @@ export class MovieRepository {
     search?: string, 
     genreSlug?: string, 
     countrySlug?: string, 
-    languageSlug?: string
+    languageSlug?: string,
+    platformSlug?: string
   ): Prisma.ScrapedMovieWhereInput {
     const whereClause: Prisma.ScrapedMovieWhereInput = {};
     
@@ -109,6 +111,15 @@ export class MovieRepository {
       whereClause.language = {
         some: {
           slug: languageSlug,
+        },
+      };
+    }
+    
+    // Filtro por plataforma de streaming
+    if (platformSlug) {
+      whereClause.streamingPlatforms = {
+        some: {
+          slug: platformSlug,
         },
       };
     }
@@ -287,6 +298,28 @@ async findManyByCountry(country: string, take: number) {
       orderBy: {
         nome: 'asc',
       },
+    });
+  }
+
+  async findAllPlatforms() {
+    return this.prisma.streamingPlatform.findMany({
+      select: {
+        slug: true,
+        nome: true,
+        nomePt: true,
+        categoria: true,
+        isFeatured: true,
+        _count: {
+          select: {
+            movies: true
+          }
+        }
+      },
+      orderBy: [
+        { isFeatured: 'desc' },
+        { categoria: 'asc' },
+        { nome: 'asc' }
+      ],
     });
   }
 }

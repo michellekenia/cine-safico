@@ -19,6 +19,7 @@ export class MovieService {
     genre?: string,
     country?: string,
     language?: string,
+    platform?: string,
   ) {
     this.logger.log(
       `Buscando filmes paginados: página ${page}, tamanho ${pageSize}, filtros: ${JSON.stringify(
@@ -27,6 +28,7 @@ export class MovieService {
           genre,
           country,
           language,
+          platform,
         },
       )}`,
     );
@@ -38,6 +40,7 @@ export class MovieService {
       genre,
       country,
       language,
+      platform,
     );
   }
 
@@ -143,5 +146,25 @@ export class MovieService {
       `Buscando filmes por idioma: ${languageSlug}, limite: ${limit}`,
     );
     return this.movieRepository.findManyByLanguage(languageSlug, limit);
+  }
+
+  async findAllPlatforms(): Promise<MetadataListResponseDto> {
+    this.logger.log('Buscando todas as plataformas com contagem de filmes...');
+
+    const platforms = await this.movieRepository.findAllPlatforms();
+
+    const items = platforms.map((platform) => ({
+      slug: platform.slug,
+      nome: platform.nome,
+      nomePt: platform.nomePt,
+      count: platform._count.movies,
+      categoria: platform.categoria,
+      isFeatured: platform.isFeatured,
+    }));
+
+    return {
+      items,
+      total: items.length,
+    };
   }
 }
