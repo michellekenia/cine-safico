@@ -36,11 +36,14 @@ export class MovieRepository {
     countrySlug?: string,
     languageSlug?: string,
     platformSlug?: string,
+    year?: number,
+    yearFrom?: number,
+    yearTo?: number,
   ): Promise<PaginatedResult<MovieSummary>> {
     const pageNumber = Math.max(1, page);
     const size = Math.max(1, pageSize);
 
-    const where = this.buildWhereClause(search, genreSlug, countrySlug, languageSlug, platformSlug);
+    const where = this.buildWhereClause(search, genreSlug, countrySlug, languageSlug, platformSlug, year, yearFrom, yearTo);
     const skip = (pageNumber - 1) * size;
 
     const [movies, total] = await this.prisma.$transaction([
@@ -76,7 +79,10 @@ export class MovieRepository {
     genreSlug?: string, 
     countrySlug?: string, 
     languageSlug?: string,
-    platformSlug?: string
+    platformSlug?: string,
+    year?: number,
+    yearFrom?: number,
+    yearTo?: number
   ): Prisma.ScrapedMovieWhereInput {
     const whereClause: Prisma.ScrapedMovieWhereInput = {};
     
@@ -122,6 +128,33 @@ export class MovieRepository {
           slug: platformSlug,
         },
       };
+    }
+    
+    // Filtros por ano
+    if (year) {
+      whereClause.releaseDate = year.toString();
+    } else if (yearFrom || yearTo) {
+      const yearConditions: any[] = [];
+      
+      if (yearFrom) {
+        yearConditions.push({
+          releaseDate: {
+            gte: yearFrom.toString(),
+          },
+        });
+      }
+      
+      if (yearTo) {
+        yearConditions.push({
+          releaseDate: {
+            lte: yearTo.toString(),
+          },
+        });
+      }
+      
+      if (yearConditions.length > 0) {
+        whereClause.AND = yearConditions;
+      }
     }
     
     return whereClause;
@@ -320,5 +353,34 @@ async findManyByCountry(country: string, take: number) {
         { nome: 'asc' }
       ],
     });
+  }
+
+  async findAvailableYears() {
+    const result = await this.prisma.$queryRaw<{year: string, count: bigint}[]>`
+      SELECT 
+        "releaseDate" as year,
+        COUNT(*) as count
+      FROM "ScrapedMovie"
+      WHERE "releaseDate" ~ '^[0-9]{4}$'
+      GROUP BY "releaseDate"
+      ORDER BY "releaseDate" DESC
+    `;
+
+    return result.map(item => ({
+      year: parseInt(item.year),
+      count: Number(item.count)
+    }));
+  }
+
+  async findYearRange() {
+    const result = await this.prisma.$queryRaw<{min_year: number, max_year: number}[]>`
+      SELECT 
+        MIN(CAST("releaseDate" AS INTEGER)) as min_year,
+        MAX(CAST("releaseDate" AS INTEGER)) as max_year
+      FROM "ScrapedMovie"
+      WHERE "releaseDate" ~ '^[0-9]{4}$'
+    `;
+
+    return result[0] || { min_year: 1900, max_year: new Date().getFullYear() };
   }
 }

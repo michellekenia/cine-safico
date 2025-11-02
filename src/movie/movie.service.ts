@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/adapters/prisma.service';
 import { MovieRepository } from './movie.repository';
 import { MetadataListResponseDto, PlatformListResponseDto } from './dto/metadata.response.dto';
+import { YearMetadataDto } from './dto/year.metadata.dto';
 
 @Injectable()
 export class MovieService {
@@ -20,6 +21,9 @@ export class MovieService {
     country?: string,
     language?: string,
     platform?: string,
+    year?: string,
+    yearFrom?: string,
+    yearTo?: string,
   ) {
     this.logger.log(
       `Buscando filmes paginados: página ${page}, tamanho ${pageSize}, filtros: ${JSON.stringify(
@@ -29,6 +33,9 @@ export class MovieService {
           country,
           language,
           platform,
+          year,
+          yearFrom,
+          yearTo,
         },
       )}`,
     );
@@ -41,6 +48,9 @@ export class MovieService {
       country,
       language,
       platform,
+      year ? parseInt(year) : undefined,
+      yearFrom ? parseInt(yearFrom) : undefined,
+      yearTo ? parseInt(yearTo) : undefined,
     );
   }
 
@@ -164,6 +174,22 @@ export class MovieService {
     return {
       items,
       total: items.length,
+    };
+  }
+
+  async findAvailableYears(): Promise<YearMetadataDto> {
+    this.logger.log('Buscando todos os anos disponíveis com contagem de filmes...');
+
+    const [years, yearRange] = await Promise.all([
+      this.movieRepository.findAvailableYears(),
+      this.movieRepository.findYearRange()
+    ]);
+
+    return {
+      items: years,
+      total: years.length,
+      minYear: yearRange.min_year,
+      maxYear: yearRange.max_year,
     };
   }
 }
