@@ -27,7 +27,11 @@ export class MovieController {
       query.search,
       query.genre,
       query.country,
-      query.language
+      query.language,
+      query.platform,
+      query.year,
+      query.yearFrom,
+      query.yearTo
     );
   }
 
@@ -51,6 +55,16 @@ export class MovieController {
   @Get('metadata/languages')
   async findAllLanguages() {
     return this.movieService.findAllLanguages();
+  }
+
+  @Get('metadata/platforms')
+  async findAllPlatforms() {
+    return this.movieService.findAllPlatforms();
+  }
+
+  @Get('metadata/years')
+  async findAvailableYears() {
+    return this.movieService.findAvailableYears();
   }
 
   // Filtros por categoria

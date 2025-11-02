@@ -1,7 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/adapters/prisma.service';
 import { MovieRepository } from './movie.repository';
-import { MetadataListResponseDto } from './dto/metadata.response.dto';
+import { MetadataListResponseDto, PlatformListResponseDto } from './dto/metadata.response.dto';
+import { YearMetadataDto } from './dto/year.metadata.dto';
 
 @Injectable()
 export class MovieService {
@@ -19,6 +20,10 @@ export class MovieService {
     genre?: string,
     country?: string,
     language?: string,
+    platform?: string,
+    year?: string,
+    yearFrom?: string,
+    yearTo?: string,
   ) {
     this.logger.log(
       `Buscando filmes paginados: página ${page}, tamanho ${pageSize}, filtros: ${JSON.stringify(
@@ -27,6 +32,10 @@ export class MovieService {
           genre,
           country,
           language,
+          platform,
+          year,
+          yearFrom,
+          yearTo,
         },
       )}`,
     );
@@ -38,6 +47,10 @@ export class MovieService {
       genre,
       country,
       language,
+      platform,
+      year ? parseInt(year) : undefined,
+      yearFrom ? parseInt(yearFrom) : undefined,
+      yearTo ? parseInt(yearTo) : undefined,
     );
   }
 
@@ -143,5 +156,40 @@ export class MovieService {
       `Buscando filmes por idioma: ${languageSlug}, limite: ${limit}`,
     );
     return this.movieRepository.findManyByLanguage(languageSlug, limit);
+  }
+
+  async findAllPlatforms(): Promise<PlatformListResponseDto> {
+    this.logger.log('Buscando todas as plataformas com contagem de filmes...');
+
+    const platforms = await this.movieRepository.findAllPlatforms();
+
+    const items = platforms.map((platform) => ({
+      slug: platform.slug,
+      nome: platform.nome,
+      count: platform._count.movies,
+      categoria: platform.categoria,
+      isFeatured: platform.isFeatured,
+    }));
+
+    return {
+      items,
+      total: items.length,
+    };
+  }
+
+  async findAvailableYears(): Promise<YearMetadataDto> {
+    this.logger.log('Buscando todos os anos disponíveis com contagem de filmes...');
+
+    const [years, yearRange] = await Promise.all([
+      this.movieRepository.findAvailableYears(),
+      this.movieRepository.findYearRange()
+    ]);
+
+    return {
+      items: years,
+      total: years.length,
+      minYear: yearRange.min_year,
+      maxYear: yearRange.max_year,
+    };
   }
 }

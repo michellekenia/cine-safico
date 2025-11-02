@@ -24,4 +24,20 @@ export class FindAllMoviesDto {
   @IsOptional()
   @IsString()
   language?: string;
+
+  @IsOptional()
+  @IsString()
+  platform?: string;
+
+  @IsOptional()
+  @IsString()
+  year?: string;
+
+  @IsOptional()
+  @IsString()
+  yearFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  yearTo?: string;
 }

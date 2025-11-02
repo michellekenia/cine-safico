@@ -25,6 +25,8 @@ model ScrapedMovie {
   scrapedAt   DateTime   @default(now())
 
   streamingServices StreamingService[]
+  
+  streamingPlatforms StreamingPlatform[]
 }
 
 model Genre {
@@ -58,4 +60,18 @@ model StreamingService {
   link           String       @db.Text
   scrapedMovie   ScrapedMovie @relation(fields: [scrapedMovieId], references: [id], onDelete: Cascade)
   scrapedMovieId String
+}
+
+model StreamingPlatform {
+  id          String   @id @default(cuid())
+  nome        String   @unique
+  slug        String   @unique
+  categoria   String   // "principal", "brasileira", "nicho", "gratuita", "digital", "internacional"
+  isFeatured  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  movies      ScrapedMovie[]
+
+  @@map("StreamingPlatform")
 }
