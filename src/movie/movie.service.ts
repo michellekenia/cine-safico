@@ -13,6 +13,16 @@ export class MovieService {
     private readonly prisma: PrismaService,
   ) {}
 
+  /**
+   * Busca filmes com paginação e ordenação configurável.
+   * 
+   * Critério de ordenação:
+   * - rating: Ordena por avaliação (string convertida para decimal)
+   * - title: Ordena por título alfabeticamente
+   * - releaseDate: Ordena por ano de lançamento
+   * 
+   * Padrão: rating DESC (melhores filmes primeiro)
+   */
   async findAllPaginated(
     page: number,
     pageSize: number,
@@ -24,20 +34,30 @@ export class MovieService {
     year?: string,
     yearFrom?: string,
     yearTo?: string,
+    orderBy?: 'rating' | 'title' | 'releaseDate',
+    order?: 'ASC' | 'DESC',
   ) {
+    // Valores padrão para ordenação
+    const sortBy = orderBy || 'rating';
+    const sortOrder = order || 'DESC';
+
     this.logger.log(
-      `Buscando filmes paginados: página ${page}, tamanho ${pageSize}, filtros: ${JSON.stringify(
-        {
-          search,
-          genre,
-          country,
-          language,
-          platform,
-          year,
-          yearFrom,
-          yearTo,
-        },
-      )}`,
+      `Buscando filmes paginados: página ${page}, tamanho ${pageSize}`,
+    );
+    this.logger.log(
+      `Filtros aplicados: ${JSON.stringify({
+        search,
+        genre,
+        country,
+        language,
+        platform,
+        year,
+        yearFrom,
+        yearTo,
+      })}`,
+    );
+    this.logger.log(
+      `Ordenação aplicada: ${sortBy} ${sortOrder}`,
     );
 
     return this.movieRepository.findAllPaginated(
@@ -51,6 +71,8 @@ export class MovieService {
       year ? parseInt(year) : undefined,
       yearFrom ? parseInt(yearFrom) : undefined,
       yearTo ? parseInt(yearTo) : undefined,
+      sortBy,
+      sortOrder,
     );
   }
 
