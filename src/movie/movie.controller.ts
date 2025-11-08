@@ -15,11 +15,26 @@ export class MovieController {
     private readonly movieService: MovieService, 
   ) { }
 
-  // Buscas paginadas e filtráveis
+  /**
+   * Busca filmes com paginação, filtros e ordenação configurável.
+   * 
+   * Parâmetros de ordering:
+   * - orderBy: 'rating' (padrão), 'title', 'releaseDate'
+   * - order: 'DESC' (padrão), 'ASC'
+   * 
+   * Exemplos:
+   * GET /movies?orderBy=rating&order=DESC (melhores filmes primeiro)
+   * GET /movies?orderBy=title&order=ASC (ordem alfabética)
+   * GET /movies?orderBy=releaseDate&order=DESC (mais recentes primeiro)
+   */
   @Get()
   async findPaginated(@Query(new ValidationPipe({ transform: true })) query: FindAllMoviesDto) {
     const page = query.page ? parseInt(query.page) : 1;
     const pageSize = query.pageSize ? parseInt(query.pageSize) : 24;
+
+    // Manter compatibilidade: padrão rating DESC se não especificado
+    const orderBy = query.orderBy || 'rating';
+    const order = query.order || 'DESC';
 
     return this.movieService.findAllPaginated(
       page, 
@@ -31,7 +46,9 @@ export class MovieController {
       query.platform,
       query.year,
       query.yearFrom,
-      query.yearTo
+      query.yearTo,
+      orderBy,
+      order
     );
   }
 
