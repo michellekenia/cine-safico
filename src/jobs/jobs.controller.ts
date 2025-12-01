@@ -86,4 +86,24 @@ export class JobsController {
     this.logger.log('Job de Tradução de sinopses disparado em segundo plano.');
     return { message: 'Synopses translation job triggered successfully in the background.' };
   } 
+  
+    @Post('trigger-wakeup')
+    async triggerWakeup() {
+      this.logger.log('Aplicação sendo acordada via endpoint trigger-wakeup');
+    
+      const timestamp = new Date().toISOString();
+      const uptime = process.uptime();
+      const memoryUsage = process.memoryUsage();
+    
+      this.logger.log(`Aplicação acordada com sucesso em ${timestamp}`);
+      this.logger.log(`Uptime: ${Math.floor(uptime / 60)} minutos`);
+
+      return { 
+        message: 'Application wakeup successful',
+        status: 'awake',
+        timestamp,
+        uptime: `${Math.floor(uptime / 60)} minutes`,
+       memoryUsage: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`
+      };
+    }
 }
