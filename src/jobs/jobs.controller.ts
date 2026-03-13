@@ -1,7 +1,7 @@
 import { ScraperService } from "src/scraper/scraper.service";
 import { TranslationService } from "src/translate/translation.service";
 import { ConfigService } from "@nestjs/config";
-import { Logger, Post, ForbiddenException, Controller, Body, BadRequestException } from "@nestjs/common";
+import { Logger, Post, ForbiddenException, Controller} from "@nestjs/common";
 
 @Controller('scraper')
 export class JobsController {
@@ -27,7 +27,7 @@ export class JobsController {
     // Dispara o job em segundo plano e retorna uma resposta imediata
     setTimeout(async () => {
       try {
-        await this.scraperService.scrapeMovies('https://letterboxd.com/mih_kenia/list/lista1/');
+        await this.scraperService.scrapeMovies('https://letterboxd.com/osasco12/list/saficos/');
         this.logger.log('Job de Scraping concluído com sucesso.');
       } catch (error) {
         this.logger.error(`Erro durante o scraping: ${error.message}`);
@@ -106,90 +106,4 @@ export class JobsController {
        memoryUsage: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`
       };
     }
-
-    /**
-     * Endpoint genérico para scraping de listas específicas do Letterboxd e associação de gêneros.
-     * 
-     * USO:
-     * POST /jobs/trigger-list-scraper
-     * Content-Type: application/json
-     * 
-     * Body para filmes de Natal:
-     * {
-     *   "listUrl": "https://letterboxd.com/osasco12/list/selecao-natal-para-cinesafico/share/8PVrv3Roxba0JqVz/",
-     *   "genreName": "Christmas"
-     * }
-     * 
-     * Body para outras listas/gêneros:
-     * {
-     *   "listUrl": "https://letterboxd.com/usuario/list/minha-lista/",
-     *   "genreName": "Horror"
-     * }
-     * 
-     * O gênero será criado automaticamente se não existir.
-     */
-    @Post('trigger-list-scraper')
-    async triggerListScraper(@Body() body: { listUrl: string; genreName: string }) {
-      this.logger.log(`� Recebendo requisição para scraping de lista específica...`);
-      this.logger.log(`📋 Lista: ${body.listUrl}`);
-      this.logger.log(`🏷️ Gênero: ${body.genreName}`);
-      
-      // Validação dos parâmetros
-      if (!body.listUrl || !body.genreName) {
-        this.logger.error('❌ Parâmetros obrigatórios: listUrl e genreName');
-        throw new BadRequestException('Required parameters: listUrl and genreName');
-      }
-      
-      // Verifica se o job está habilitado no .env
-      const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
-      if (!isJobEnabled) {
-        this.logger.warn('❌ Job de Scraping está desabilitado no .env');
-        throw new ForbiddenException('Scraping job is currently disabled.');
-      }
-      
-      // Dispara o job em segundo plano
-      setTimeout(async () => {
-        try {
-          this.logger.log(`🚀 Iniciando scraping da lista para gênero "${body.genreName}"...`);
-          
-          // Scraping da lista específica
-          const scrapedMovies = await this.scraperService.scrapeMovies(body.listUrl);
-          
-          this.logger.log(`📥 Scraping concluído (${scrapedMovies.length} filmes novos), marcando TODOS os filmes da lista como gênero "${body.genreName}"...`);
-          
-          // Marcar TODOS os filmes da lista com o gênero especificado (novos + existentes)
-          const count = await this.scraperService.markMoviesFromListAsGenre(body.listUrl, body.genreName);
-          
-          this.logger.log(`🎉 Job de Scraping concluído com SUCESSO! ${scrapedMovies.length} filmes novos + ${count} total marcados como "${body.genreName}".`);
-          
-        } catch (error) {
-          this.logger.error(`💥 ERRO durante scraping da lista: ${error.message}`);
-          this.logger.error('Stack trace:', error.stack);
-        }
-      }, 0);
-      
-      this.logger.log('✅ Job de Scraping de lista disparado em segundo plano.');
-      return { 
-        message: `List scraping started in background for genre "${body.genreName}".`,
-        status: 'started',
-        listUrl: body.listUrl,
-        genreName: body.genreName
-      };
-    }
-
-    /**
-     * Endpoint específico para filmes de Natal (mantido para compatibilidade).
-     * Este endpoint usa o endpoint genérico internamente.
-     */
-    @Post('trigger-christmas-scraper')
-    async triggerChristmasScraper() {
-      this.logger.log('🎄 Recebendo requisição para scraping de filmes de Natal...');
-      
-      // Chama o endpoint genérico com parâmetros de Natal
-      return this.triggerListScraper({
-        listUrl: 'https://letterboxd.com/osasco12/list/selecao-natal-para-cinesafico/share/8PVrv3Roxba0JqVz/',
-        genreName: 'Christmas'
-      });
-    }
-
 }

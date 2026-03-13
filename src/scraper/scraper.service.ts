@@ -310,7 +310,7 @@ export class ScraperService implements OnModuleDestroy {
 
     while (hasNextPage) {
       this.logger.log(`Analisando página da lista: ${pageCount}...`);
-      await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 120000 }); // Aumentar timeout para 2 minutos
+      await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 60000 });
 
       this.logger.log(
         'Iniciando scroll para carregar todos os filmes (lazy loading)...',
@@ -412,7 +412,7 @@ export class ScraperService implements OnModuleDestroy {
         rating: (() => {
           const el = document.querySelector(s.moviePage.rating);
           if (!el) return '0';
-          const value = el.textContent?.trim() || '';
+          const value = el.textContent.trim();
           return value ? value : '0';
         })(),
 
@@ -486,6 +486,51 @@ export class ScraperService implements OnModuleDestroy {
       return { details, streaming };
     }, SELECTORS);
 
+    //registrar a duração obtida
+    if (pageData.details.duration) {
+      this.logger.log(`Duração capturada para '${pageData.details.title}': ${pageData.details.duration}`);
+    } else {
+      this.logger.warn(`Duração NÃO encontrada para '${pageData.details.title}'.`);
+    }
+    //registrar o rating obtido
+    if (pageData.details.rating) {
+      this.logger.log(`Rating capturado para '${pageData.details.title}': ${pageData.details.rating}`);
+    } else {
+      this.logger.warn(`Rating NÃO encontrado para '${pageData.details.title}'.`);
+    }
+    //registrar apenas os gêneros
+    this.logger.log(`Gêneros do filme '${pageData.details.title}': ${pageData.details.genres.join(', ')}`);
+    
+    // Log detalhado de gêneros com slugs
+    if (pageData.details.genres.length > 0) {
+      this.logger.log('Detalhes dos gêneros:');
+      pageData.details.genres.forEach(genreName => {
+        this.logger.log(`- ${genreName} => slug: ${this.createSlugFromName(genreName)}`);
+      });
+    }
+    
+    //registrar country e language
+    this.logger.log(`Country do filme '${pageData.details.title}': ${pageData.details.country.join(', ')}`);
+    
+    // Log detalhado de países com slugs
+    if (pageData.details.country.length > 0) {
+      this.logger.log('Detalhes dos países:');
+      pageData.details.country.forEach(countryName => {
+        this.logger.log(`- ${countryName} => slug: ${this.createSlugFromName(countryName)}`);
+      });
+    }
+    
+    this.logger.log(`Language do filme '${pageData.details.title}': ${pageData.details.language.join(', ')}`);
+    
+    // Log detalhado de idiomas com slugs
+    if (pageData.details.language.length > 0) {
+      this.logger.log('Detalhes dos idiomas:');
+      pageData.details.language.forEach(languageName => {
+        this.logger.log(`- ${languageName} => slug: ${this.createSlugFromName(languageName)}`);
+      });
+    }
+
+
     await page.close();
     return pageData;
   }
@@ -510,142 +555,5 @@ export class ScraperService implements OnModuleDestroy {
       .replace(/\s+/g, '-') // Substitui espaços por hífens
       .replace(/--+/g, '-') // Remove hífens duplicados
       .trim();
-  }
-
-  /**
-   * Marca filmes de uma lista específica do Letterboxd como Natal/Christmas.
-   * Este método busca filmes existentes no banco que fazem parte da lista fornecida.
-   * @param listUrl URL da lista do Letterboxd
-   * @returns Número de filmes marcados como Natal
-   */
-  async markMoviesFromListAsChristmas(listUrl: string): Promise<number> {
-    return this.markMoviesFromListAsGenre(listUrl, 'Christmas');
-  }
-
-  /**
-   * Marca filmes de uma lista específica do Letterboxd com um gênero específico.
-   * Este método é genérico e pode ser usado para qualquer gênero.
-   * @param listUrl URL da lista do Letterboxd
-   * @param genreName Nome do gênero (será criado automaticamente se não existir)
-   * @returns Número de filmes marcados com o gênero
-   */
-  async markMoviesFromListAsGenre(listUrl: string, genreName: string): Promise<number> {
-    const genreSlug = this.createSlugFromName(genreName);
-    this.logger.log(`� Iniciando marcação de filmes da lista como "${genreName}": ${listUrl}`);
-    
-    try {
-      // Buscar ou criar o gênero
-      const genre = await this.prisma.genre.upsert({
-        where: { slug: genreSlug },
-        update: {},
-        create: { 
-          nome: genreName,
-          slug: genreSlug,
-          isFeatured: genreName.toLowerCase() === 'christmas' // Destacar apenas Christmas por padrão
-        }
-      });
-
-      this.logger.log(`✅ Gênero "${genreName}" encontrado/criado: ID ${genre.id}`);
-
-      // Fazer scraping apenas dos links da lista (sem salvar filmes)
-      const movieLinks = await this.scrapeMovieLinksOnly(listUrl);
-      this.logger.log(`📋 Encontrados ${movieLinks.length} filmes na lista`);
-
-      // Extrair slugs dos filmes da lista
-      const slugsFromList = movieLinks
-        .map(link => this.extractSlugFromUrl(link.href))
-        .filter(slug => slug !== null);
-
-      this.logger.log(`🔍 Slugs extraídos da lista: ${slugsFromList.length}`);
-
-      // Buscar filmes existentes no banco que estão na lista
-      const existingMovies = await this.prisma.scrapedMovie.findMany({
-        where: {
-          slug: { in: slugsFromList }
-        },
-        include: { genres: true }
-      });
-
-      this.logger.log(`💾 Filmes encontrados no banco: ${existingMovies.length}`);
-
-      // Marcar com o gênero os que ainda não têm esse gênero
-      let markedCount = 0;
-      for (const movie of existingMovies) {
-        const hasGenre = movie.genres.some(g => g.slug === genreSlug);
-        
-        if (!hasGenre) {
-          await this.prisma.scrapedMovie.update({
-            where: { id: movie.id },
-            data: { 
-              genres: { 
-                connect: { id: genre.id } 
-              } 
-            }
-          });
-          markedCount++;
-          this.logger.log(`� "${movie.title}" marcado como "${genreName}"`);
-        } else {
-          this.logger.log(`� "${movie.title}" já possui gênero "${genreName}"`);
-        }
-      }
-
-      // Listar filmes da lista que não estão no banco
-      const existingSlugs = new Set(existingMovies.map(m => m.slug));
-      const missingFromDb = slugsFromList.filter(slug => !existingSlugs.has(slug));
-      if (missingFromDb.length > 0) {
-        this.logger.warn(`⚠️ Filmes da lista que NÃO estão no banco (${missingFromDb.length}): ${missingFromDb.join(', ')}`);
-      }
-
-      this.logger.log(`🎉 Processo concluído! ${markedCount} filmes marcados como "${genreName}".`);
-      return markedCount;
-      
-    } catch (error) {
-      this.logger.error(`❌ Erro ao marcar filmes da lista como "${genreName}":`, error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Marca filmes de uma lista específica do Letterboxd como um gênero específico.
-  /**
-   * Método auxiliar para fazer scraping apenas dos links dos filmes (sem processar detalhes).
-   * @param listUrl URL da lista do Letterboxd
-   * @returns Array com os links dos filmes
-   */
-  private async scrapeMovieLinksOnly(listUrl: string): Promise<Array<{ href: string; poster: string | null }>> {
-    const launchOptions: puppeteer.LaunchOptions = {
-      headless: true,
-      timeout: 120000,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--memory-pressure-off',
-        '--no-zygote',
-      ],
-    };
-
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-      launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-    } else if (process.env.NODE_ENV === 'production') {
-      launchOptions.executablePath = '/usr/bin/google-chrome-stable';
-    } else {
-      launchOptions.channel = 'chrome';
-    }
-
-    const browser = await puppeteer.launch(launchOptions);
-    
-    try {
-      const movieLinks = await this.scrapeMovieLinks(browser, listUrl);
-      return movieLinks;
-    } finally {
-      await browser.close();
-    }
   }
 }
