@@ -1,85 +1,11 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import * as puppeteer from 'puppeteer-core';
-import { Browser } from 'puppeteer-core';
-import { PrismaService } from 'src/adapters/prisma.service';
-import { ScrapedMovie } from '@prisma/client';
-import { Page } from 'puppeteer-core';
-
-interface MovieDetails {
-  title: string | null;
-  releaseYear: string | null;
-  director: string | null;
-  synopsis: string | null;
-  posterImage: string | null;
-  duration: string | null;
-  rating: string | null;
-  genres: string[];
-  country: string[];
-  language: string[];
-}
-
-interface StreamingInfo {
-  service: string;
-  link: string;
-}
-
-interface MoviePageData {
-  details: MovieDetails;
-  streaming: StreamingInfo[];
-}
-
-const SELECTORS = {
-  list: {
-    movieFrame: 'ul.poster-list li a.frame',
-    nextPageButton: 'a.next',
-  },
-  moviePage: {
-    title: 'meta[property="og:title"]',
-    director: 'meta[name="twitter:data1"]',
-    synopsis: 'meta[name="description"]',
-    posterImageSrc: '.poster .film-poster img',
-    releaseYear: 'a[href*="/year/"]',
-    watchPanel: 'section.watch-panel .services',
-    serviceItem: 'section.watch-panel .services p.service',
-    serviceLink: 'a.label',
-    serviceName: 'a.label .title .name',
-    serviceLocale: 'a.label .title .locale',
-    duration: 'p.text-link.text-footer',
-    rating: 'a.display-rating',
-    genres: 'div.genres a'
-  },
-};
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { IScraper, IBrowserProvider, IMovieParser, IMovieStorage, BROWSER_PROVIDER, MOVIE_PARSER, MOVIE_STORAGE } from './interfaces/scraper.interface';
+import { MovieData, ScrapedMovieRecord } from './interfaces/models.interface';
+import { SlugService } from './services/slug.service';
 
 /**
- * Rola a página até o final para garantir que todo o conteúdo de lazy loading seja carregado.
- * @param page A instância da página do Puppeteer.
- */
-async function autoScroll(page: Page) {
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      let totalHeight = 0;
-      const distance = 100;
-      const timer = setInterval(() => {
-        const scrollHeight = document.body.scrollHeight;
-        window.scrollBy(0, distance);
-        totalHeight += distance;
-
-        if (totalHeight >= scrollHeight) {
-          clearInterval(timer);
-          resolve();
-        }
-      }, 100);
-    });
-  });
-}
-
-/**
- * Executa uma ação assíncrona com um número máximo de tentativas.
- * @param action A função (Promise) a ser executada.
- * @param maxRetries O número máximo de tentativas.
- * @param logger O logger para registrar as tentativas.
- * @param context Uma string de contexto para a mensagem de log.
- * @returns O resultado da ação se for bem-sucedida.
+ * Função auxiliar para retry com backoff exponencial
+ * Executa uma ação com múltiplas tentativas em caso de erro
  */
 async function scrapeWithRetries<T>(
   action: () => Promise<T>,
@@ -91,9 +17,7 @@ async function scrapeWithRetries<T>(
     try {
       return await action();
     } catch (error) {
-      logger.warn(
-        `Tentativa ${attempt} falhou para ${context}: ${error.message}`,
-      );
+      logger.warn(`Tentativa ${attempt} falhou para ${context}: ${error.message}`);
       if (attempt === maxRetries) {
         logger.error(
           `Todas as ${maxRetries} tentativas falharam para ${context}. Desistindo.`,
@@ -107,435 +31,142 @@ async function scrapeWithRetries<T>(
   throw new Error('Lógica de retries falhou inesperadamente.');
 }
 
+/**
+ * ScraperService
+ * 
+ * Serviço orquestrador para raspagem de filmes do Letterboxd
+ * Delegação de responsabilidades para serviços especializados:
+ * - BrowserProvider: Gerencia navegador Puppeteer
+ * - MovieParser: Extrai dados do HTML
+ * - MovieStorage: Persiste dados no banco
+ * - SlugService: Gera slugs normalizados
+ */
 @Injectable()
-export class ScraperService implements OnModuleDestroy {
+export class ScraperService implements IScraper {
   private readonly logger = new Logger(ScraperService.name);
-  private browser: Browser | null = null;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(BROWSER_PROVIDER)
+    private readonly browserProvider: IBrowserProvider,
+    @Inject(MOVIE_PARSER)
+    private readonly movieParser: IMovieParser,
+    @Inject(MOVIE_STORAGE)
+    private readonly movieStorage: IMovieStorage,
+    private readonly slugService: SlugService,
+  ) {}
 
-  async onModuleDestroy() {
-    if (this.browser) {
-      this.logger.log('Fechando o navegador ao destruir o módulo...');
-      await this.browser.close();
-    }
-  }
-
-  async scrapeMovies(listLink: string): Promise<ScrapedMovie[]> {
+  /**
+   * Inicia o processo completo de raspagem de filmes
+   * 
+   * Fluxo:
+   * 1. Iniciar navegador
+   * 2. Extrair links de filmes da lista
+   * 3. Filtrar filmes já existentes
+   * 4. Extrair detalhes de cada filme com retry
+   * 5. Salvar filmes no banco
+   * 6. Retornar filmes salvos
+   * 
+   * @param listLink - URL da lista de filmes no Letterboxd
+   * @returns Array de filmes salvos
+   */
+  async scrapeMovies(listLink: string): Promise<ScrapedMovieRecord[]> {
     this.logger.log(`Iniciando processo de raspagem da lista: ${listLink}`);
 
-    const launchOptions: puppeteer.LaunchOptions = {
-      headless: true,
-      timeout: 120000,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--memory-pressure-off',
-        '--no-zygote',
-        '--disable-blink-features=AutomationControlled',
-      ],
-    };
-
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-      launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-    } else if (process.env.NODE_ENV === 'production') {
-      launchOptions.executablePath = '/usr/bin/google-chrome-stable';
-    } else {
-      launchOptions.channel = 'chrome';
-    }
+    const browser = await this.browserProvider.launch();
 
     try {
-      this.browser = await puppeteer.launch(launchOptions);
+      // 1. Extrair links de filmes
+      const movieLinks = await this.movieParser.extractLinks(browser, listLink);
+      this.logger.log(`Encontrados ${movieLinks.length} filmes na lista`);
 
-      const existingSlugs = new Set(
-        (
-          await this.prisma.scrapedMovie.findMany({ select: { slug: true } })
-        ).map((m) => m.slug),
-      );
+      if (movieLinks.length === 0) {
+        this.logger.warn('Nenhum filme encontrado na lista');
+        return [];
+      }
 
-      const movieLinks = await this.scrapeMovieLinks(this.browser, listLink);
-      const newMovies: ScrapedMovie[] = [];
+      // 2. Filtrar filmes já existentes no banco
+      const slugs = movieLinks.map((link) => this.extractSlugFromUrl(link.href)).filter(Boolean) as string[];
+      const existingSlugs = await this.movieStorage.findExistingSlugs(slugs);
+      const existingSet = new Set(existingSlugs);
 
-      for (const { href, poster } of movieLinks) {
+      const newMovieLinks = movieLinks.filter((link) => {
+        const slug = this.extractSlugFromUrl(link.href);
+        return slug && !existingSet.has(slug);
+      });
+
+      this.logger.log(`${newMovieLinks.length} filmes são novos`);
+
+      // 3. Extrair detalhes de cada filme com retry
+      const moviesToSave: MovieData[] = [];
+
+      for (const { href, poster } of newMovieLinks) {
         const slug = this.extractSlugFromUrl(href);
-        if (!slug || existingSlugs.has(slug)) {
-          if (slug)
-            this.logger.log(`Filme já existe no banco, pulando: ${slug}`);
-          continue;
-        }
+        if (!slug) continue;
 
         try {
-          const { details, streaming } = await scrapeWithRetries(
-            () => this.scrapeMoviePage(this.browser!, href),
+          const pageData = await scrapeWithRetries(
+            () => this.movieParser.extractDetails(browser, href),
             3,
             this.logger,
             `filme ${slug}`,
           );
 
-          if (!details.title) {
-            this.logger.warn(
-              `Título não encontrado para ${href}, pulando intencionalmente.`,
-            );
+          // Validar se título foi extraído
+          if (!pageData.details.title) {
+            this.logger.warn(`Título não encontrado para ${href}, pulando...`);
             continue;
           }
 
-          // Otimiza a URL do poster para maior resolução
-          let posterUrl = details.posterImage || poster;
-          if (posterUrl?.includes('ltrbxd.com/resized/film-poster')) {
-            const match = posterUrl.match(/(.*\/film-poster\/.*?)-\d+-\d+-\d+-\d+-crop\.jpg(.*)/);
-            if (match) {
-              const [, basePath, queryParams] = match;
-              posterUrl = `${basePath}-0-2000-0-3000-crop.jpg${queryParams}`;
-            }
-          }
-          const posterToSave = posterUrl;
+          // Otimizar URL do poster
+          const posterUrl = this.movieStorage.optimizePosterUrl(
+            pageData.details.posterImage || poster,
+          );
 
-          const savedMovie = await this.prisma.scrapedMovie.create({
-            data: {
-              slug,
-              title: details.title,
-              releaseDate: details.releaseYear,
-              director: details.director,
-              synopsisEn: details.synopsis,
-              posterImage: posterToSave,
-              duration: details.duration,
-              rating: details.rating,
-              // Usar connectOrCreate para gêneros (tabela relacional)
-              genres: {
-                connectOrCreate: details.genres.map(genreName => ({
-                  where: { slug: this.createSlugFromName(genreName) },
-                  create: { 
-                    nome: genreName,
-                    slug: this.createSlugFromName(genreName) 
-                  }
-                }))
-              },
-              // Usar connectOrCreate para países (tabela relacional)
-              country: {
-                connectOrCreate: details.country.map(countryName => ({
-                  where: { slug: this.createSlugFromName(countryName) },
-                  create: {
-                    nome: countryName,
-                    slug: this.createSlugFromName(countryName)
-                  }
-                }))
-              },
-              // Usar connectOrCreate para idiomas (tabela relacional)
-              language: {
-                connectOrCreate: details.language.map(languageName => ({
-                  where: { slug: this.createSlugFromName(languageName) },
-                  create: {
-                    nome: languageName,
-                    slug: this.createSlugFromName(languageName)
-                  }
-                }))
-              },
-              streamingServices: {
-                create: streaming,
-              },
-            },
-          });
+          // Montar objeto para salvar
+          const movieData: MovieData = {
+            slug,
+            posterUrl,
+            details: pageData.details,
+            streaming: pageData.streaming,
+          };
 
-          this.logger.log(`✅ Filme salvo: ${savedMovie.slug}`);
-          newMovies.push(savedMovie);
-        } catch (e) {
+          moviesToSave.push(movieData);
+        } catch (error) {
           this.logger.error(
-            `Falha final ao processar ${href} após todas as tentativas: ${e.message}`,
-            e.stack,
+            `Falha ao processar ${href} após todas as tentativas: ${error.message}`,
           );
         }
       }
 
-      this.logger.log(
-        `Raspagem finalizada. Total de filmes novos: ${newMovies.length}`,
-      );
-      return newMovies;
+      // 4. Salvar filmes no banco
+      const savedMovies = await this.movieStorage.saveMovies(moviesToSave);
+      this.logger.log(`✅ Raspagem finalizada. Total de filmes salvos: ${savedMovies.length}`);
+
+      return savedMovies;
     } catch (error) {
       this.logger.error(
-        `Um erro crítico ocorreu durante a raspagem: ${error.message}`,
-        error.stack,
+        `❌ Erro crítico durante a raspagem: ${error.message}`,
       );
       return [];
     } finally {
-      if (this.browser) {
-        this.logger.log('Encerrando instância do navegador...');
-        await this.browser.close();
-        this.browser = null;
-      }
+      // 5. Fechar navegador
+      await this.browserProvider.close();
     }
-  }
-
-  private async scrapeMovieLinks(
-    browser: Browser,
-    listLink: string,
-  ): Promise<Array<{ href: string; poster: string | null }>> {
-    const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(180000); // 3 minutos
-
-    // Definir User-Agent realista
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    );
-
-    try {
-      await page.goto(listLink, { waitUntil: 'networkidle2', timeout: 180000 });
-    } catch (e) {
-      try {
-        await page.goto(listLink, { waitUntil: 'domcontentloaded', timeout: 120000 });
-      } catch (retryError) {
-        this.logger.error(`Falha ao carregar página da lista: ${retryError.message}`);
-        await page.close();
-        return [];
-      }
-    }
-
-    // Esperar a renderização de conteúdo dinâmico
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-
-    const movieLinks: { href: string; poster: string | null }[] = [];
-    let hasNextPage = true;
-    let pageCount = 1;
-
-    while (hasNextPage) {
-      this.logger.log(`📄 Analisando página ${pageCount}...`);
-      try {
-        await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 60000 });
-      } catch (e) {
-        const elementCount = await page.evaluate(() => {
-          return document.querySelectorAll('ul.poster-list li').length;
-        });
-        
-        if (elementCount === 0) {
-          hasNextPage = false;
-          break;
-        }
-      }
-
-      await autoScroll(page);
-
-      const linksOnPage = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('ul.poster-list li')).map((li) => {
-          // Tentar primeiro a.frame, se não existir tenta só a
-          let a = li.querySelector('a.frame') as HTMLAnchorElement;
-          if (!a) {
-            a = li.querySelector('a') as HTMLAnchorElement;
-          }
-          const href = a ? a.href : null;
-          const img = li.querySelector('img');
-          let poster = null;
-          if (img) {
-            const srcset = img.getAttribute('srcset');
-            if (srcset) {
-              poster = srcset.split(',').pop()?.trim().split(' ')[0] || null;
-            } else {
-              poster = img.getAttribute('src');
-            }
-          }
-          return { href, poster };
-        });
-      });
-      
-      if (linksOnPage.length === 0) {
-        hasNextPage = false;
-      } else {
-        movieLinks.push(...linksOnPage);
-      }
-
-      // Lógica de paginação
-      const nextButton = await page.$(SELECTORS.list.nextPageButton);
-      if (nextButton) {
-        try {
-          await Promise.all([
-            nextButton.click(),
-            page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 180000 }),
-          ]);
-          await new Promise((resolve) =>
-            setTimeout(resolve, 2000 + Math.random() * 3000),
-          );
-          pageCount++;
-        } catch (navError) {
-          this.logger.warn(`⚠️ Erro na navegação: ${navError.message}`);
-          hasNextPage = false;
-        }
-      } else {
-        hasNextPage = false;
-      }
-    }
-
-    await page.close();
-    this.logger.log(`✅ Total de filmes coletados: ${movieLinks.length}`);
-    
-    return movieLinks;
-  }
-
-  private async scrapeMoviePage(
-    browser: Browser,
-    movieLink: string,
-  ): Promise<MoviePageData> {
-    const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(180000); // 3 minutos
-
-    // Definir User-Agent realista
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    );
-
-    this.logger.log(`Raspando detalhes de: ${movieLink}`);
-    try {
-      await page.goto(movieLink, { waitUntil: 'networkidle2', timeout: 180000 }); // 3 minutos
-    } catch (e) {
-      this.logger.warn(`⚠️ Timeout com networkidle2, tentando com domcontentloaded: ${e.message}`);
-      try {
-        await page.goto(movieLink, { waitUntil: 'domcontentloaded', timeout: 120000 });
-        this.logger.log('✅ Página do filme carregada com waitUntil: domcontentloaded.');
-      } catch (retryError) {
-        this.logger.error(`❌ Falha final ao carregar página do filme: ${retryError.message}`);
-        await page.close();
-        throw retryError;
-      }
-    }
-
-    const pageData = await page.evaluate((s): MoviePageData => {
-      const query = (selector: string, attribute = 'content') =>
-        document.querySelector(selector)?.getAttribute(attribute) || null;
-
-      const details: MovieDetails = {
-        title: (() => {
-          const rawTitle = query(s.moviePage.title);
-          if (!rawTitle) return null;
-          // Remove o ano entre parênteses no final do título, ex: "Nome do Filme (2023)"
-          return rawTitle.replace(/\s*\(\d{4}\)$/, '').trim();
-        })(),
-        director: query(s.moviePage.director),
-        synopsis: query(s.moviePage.synopsis),
-        posterImage: (() => {
-          const img = document.querySelector(s.moviePage.posterImageSrc);
-          const srcset = img?.getAttribute('srcset');
-          if (srcset) {
-            // Pega a última URL do srcset (maior resolução)
-            return srcset.split(',').pop()?.trim().split(' ')[0] || null;
-          }
-          return img?.getAttribute('src') || null;
-        })(),
-        
-        releaseYear:
-          document.querySelector(s.moviePage.releaseYear)?.textContent || null,
-
-        duration: (() => {
-          const el = document.querySelector('p.text-link.text-footer');
-          if (!el) return null;
-          const raw = el.textContent.trim();
-          const match = raw.match(/(\d+\s*mins?)/);
-          return match ? match[1] : null;
-        })(),
-
-        rating: (() => {
-          const el = document.querySelector(s.moviePage.rating);
-          if (!el) return '0';
-          const value = el.textContent.trim();
-          return value ? value : '0';
-        })(),
-
-        genres: Array.from(document.querySelectorAll('#tab-genres .text-sluglist.capitalize:nth-of-type(1) a.text-slug')).map(
-          (el) => el.textContent?.trim() || ''
-        ),
-
-        //Country
-        country: (() => {
-          const detailsTab = document.querySelector('#tab-details');
-          let countries: string[] = [];
-          if (detailsTab) {
-            const h3s = Array.from(detailsTab.querySelectorAll('h3'));
-            for (const h3 of h3s) {
-              const h3Text = h3.textContent?.trim().toLowerCase();
-              if (h3Text === 'country' || h3Text === 'countries') {
-                const next = h3.nextElementSibling;
-                if (next && next.classList.contains('text-sluglist')) {
-                  countries = countries.concat(Array.from(next.querySelectorAll('a.text-slug')).map(el => el.textContent?.trim() || ''));
-                }
-              }
-            }
-          }
-          return countries;
-        })(),
-        //Language
-        language: (() => {
-          const detailsTab = document.querySelector('#tab-details');
-          let languages: string[] = [];
-          if (detailsTab) {
-            const h3s = Array.from(detailsTab.querySelectorAll('h3'));
-            for (const h3 of h3s) {
-              const h3Text = h3.textContent?.trim().toLowerCase();
-              if (h3Text === 'language' || h3Text === 'primary language') {
-                const next = h3.nextElementSibling;
-                if (next && next.classList.contains('text-sluglist')) {
-                  languages = languages.concat(Array.from(next.querySelectorAll('a.text-slug')).map(el => el.textContent?.trim() || ''));
-                }
-              }
-            }
-          }
-          return languages;
-        })(),
-      };
-
-      const streaming: StreamingInfo[] = [];
-      document.querySelectorAll(s.moviePage.serviceItem).forEach((el) => {
-        const linkEl = el.querySelector(s.moviePage.serviceLink);
-        const nameEl = el.querySelector(s.moviePage.serviceName);
-        const localeEl = el.querySelector(s.moviePage.serviceLocale);
-
-        if (
-          linkEl &&
-          nameEl &&
-          (localeEl as HTMLElement)?.innerText.trim() === 'BR'
-        ) {
-          const rawLink = linkEl.getAttribute('href');
-          if (!rawLink) return;
-          try {
-            const finalLink = new URL(rawLink).searchParams.get('r');
-            if (finalLink && !streaming.some((s) => s.link === finalLink)) {
-              streaming.push({
-                service: (nameEl as HTMLElement).innerText.trim(),
-                link: finalLink,
-              });
-            }
-          } catch {}
-        }
-      });
-
-      return { details, streaming };
-    }, SELECTORS);
-
-    await page.close();
-    return pageData;
-  }
-
-  private extractSlugFromUrl(url: string): string | null {
-    const match = url.match(/letterboxd\.com\/film\/([^\/]+)/);
-    return match ? match[1] : null;
   }
 
   /**
-   * Cria um slug a partir de um nome.
-   * Usado para gêneros, países e idiomas.
-   * @param name O nome a ser convertido em slug
-   * @returns Um slug normalizado
+   * Extrai slug da URL do Letterboxd
+   * Exemplo: https://letterboxd.com/film/inception/ → inception
+   * 
+   * @param url - URL do filme
+   * @returns Slug do filme ou null se inválido
    */
-  private createSlugFromName(name: string): string {
-    return name
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-      .replace(/[^\w\s-]/g, '') // Remove caracteres especiais
-      .replace(/\s+/g, '-') // Substitui espaços por hífens
-      .replace(/--+/g, '-') // Remove hífens duplicados
-      .trim();
+  private extractSlugFromUrl(url: string): string | null {
+    try {
+      const match = url.match(/letterboxd\.com\/film\/([^\/]+)/);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
   }
 }
