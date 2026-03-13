@@ -139,6 +139,7 @@ export class ScraperService implements OnModuleDestroy {
         '--disable-renderer-backgrounding',
         '--memory-pressure-off',
         '--no-zygote',
+        '--disable-blink-features=AutomationControlled',
       ],
     };
 
@@ -191,19 +192,10 @@ export class ScraperService implements OnModuleDestroy {
             const match = posterUrl.match(/(.*\/film-poster\/.*?)-\d+-\d+-\d+-\d+-crop\.jpg(.*)/);
             if (match) {
               const [, basePath, queryParams] = match;
-              // Usa as dimensões máximas observadas no site: 2000x3000
               posterUrl = `${basePath}-0-2000-0-3000-crop.jpg${queryParams}`;
-              this.logger.log(`Poster otimizado para alta resolução: ${posterUrl}`);
             }
           }
           const posterToSave = posterUrl;
-
-          // Log dos gêneros antes da criação para verificação
-          this.logger.log(`Gêneros a serem processados para ${slug}: ${JSON.stringify(details.genres)}`);
-          this.logger.log(`Gêneros com slugs normalizados:`);
-          details.genres.forEach(genreName => {
-            this.logger.log(`- ${genreName} => slug: ${this.createSlugFromName(genreName)}`);
-          });
 
           const savedMovie = await this.prisma.scrapedMovie.create({
             data: {
@@ -251,21 +243,7 @@ export class ScraperService implements OnModuleDestroy {
             },
           });
 
-          this.logger.log(`Filme salvo: ${savedMovie.slug} | Poster: ${posterToSave}`);
-          
-          // Verificar gêneros associados
-          const movieWithGenres = await this.prisma.scrapedMovie.findUnique({
-            where: { id: savedMovie.id },
-            include: { genres: true }
-          });
-          
-          if (movieWithGenres?.genres) {
-            this.logger.log(`Gêneros salvos para ${savedMovie.slug}:`);
-            movieWithGenres.genres.forEach(genre => {
-              this.logger.log(`- ${genre.nome} (${genre.slug})`);
-            });
-          }
-          
+          this.logger.log(`✅ Filme salvo: ${savedMovie.slug}`);
           newMovies.push(savedMovie);
         } catch (e) {
           this.logger.error(
@@ -299,35 +277,62 @@ export class ScraperService implements OnModuleDestroy {
     listLink: string,
   ): Promise<Array<{ href: string; poster: string | null }>> {
     const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(120000);
+    page.setDefaultNavigationTimeout(180000); // 3 minutos
 
-    this.logger.log(`Navegando para a lista de filmes: ${listLink}`);
-    await page.goto(listLink, { waitUntil: 'networkidle2' });
+    // Definir User-Agent realista
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    );
+
+    try {
+      await page.goto(listLink, { waitUntil: 'networkidle2', timeout: 180000 });
+    } catch (e) {
+      try {
+        await page.goto(listLink, { waitUntil: 'domcontentloaded', timeout: 120000 });
+      } catch (retryError) {
+        this.logger.error(`Falha ao carregar página da lista: ${retryError.message}`);
+        await page.close();
+        return [];
+      }
+    }
+
+    // Esperar a renderização de conteúdo dinâmico
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     const movieLinks: { href: string; poster: string | null }[] = [];
     let hasNextPage = true;
     let pageCount = 1;
 
     while (hasNextPage) {
-      this.logger.log(`Analisando página da lista: ${pageCount}...`);
-      await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 60000 });
+      this.logger.log(`📄 Analisando página ${pageCount}...`);
+      try {
+        await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 60000 });
+      } catch (e) {
+        const elementCount = await page.evaluate(() => {
+          return document.querySelectorAll('ul.poster-list li').length;
+        });
+        
+        if (elementCount === 0) {
+          hasNextPage = false;
+          break;
+        }
+      }
 
-      this.logger.log(
-        'Iniciando scroll para carregar todos os filmes (lazy loading)...',
-      );
       await autoScroll(page);
-      this.logger.log('Scroll finalizado.');
 
       const linksOnPage = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('ul.poster-list li')).map((li) => {
-          const a = li.querySelector('a.frame');
-          const href = a ? (a as HTMLAnchorElement).href : null;
+          // Tentar primeiro a.frame, se não existir tenta só a
+          let a = li.querySelector('a.frame') as HTMLAnchorElement;
+          if (!a) {
+            a = li.querySelector('a') as HTMLAnchorElement;
+          }
+          const href = a ? a.href : null;
           const img = li.querySelector('img');
           let poster = null;
           if (img) {
             const srcset = img.getAttribute('srcset');
             if (srcset) {
-              // Pega a última URL do srcset (maior resolução)
               poster = srcset.split(',').pop()?.trim().split(' ')[0] || null;
             } else {
               poster = img.getAttribute('src');
@@ -336,32 +341,37 @@ export class ScraperService implements OnModuleDestroy {
           return { href, poster };
         });
       });
-      movieLinks.push(...linksOnPage);
-      this.logger.log(`Coletados ${linksOnPage.length} filmes nesta página.`);
-
-      // Lógica de paginação para o teste
-      const nextButton = await page.$(SELECTORS.list.nextPageButton);
-      // remover '&& pageCount < 1' para a raspagem completa
-      if (nextButton) {
-        this.logger.log(
-          `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
-        );
-        await Promise.all([
-          nextButton.click(),
-          page.waitForNavigation({ waitUntil: 'networkidle2' }),
-        ]);
-        await new Promise((resolve) =>
-          setTimeout(resolve, 2000 + Math.random() * 3000),
-        );
-        pageCount++;
+      
+      if (linksOnPage.length === 0) {
+        hasNextPage = false;
       } else {
-        this.logger.log('Não há mais páginas para navegar.');
+        movieLinks.push(...linksOnPage);
+      }
+
+      // Lógica de paginação
+      const nextButton = await page.$(SELECTORS.list.nextPageButton);
+      if (nextButton) {
+        try {
+          await Promise.all([
+            nextButton.click(),
+            page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 180000 }),
+          ]);
+          await new Promise((resolve) =>
+            setTimeout(resolve, 2000 + Math.random() * 3000),
+          );
+          pageCount++;
+        } catch (navError) {
+          this.logger.warn(`⚠️ Erro na navegação: ${navError.message}`);
+          hasNextPage = false;
+        }
+      } else {
         hasNextPage = false;
       }
     }
 
     await page.close();
-    this.logger.log(`Total de filmes coletados: ${movieLinks.length}`);
+    this.logger.log(`✅ Total de filmes coletados: ${movieLinks.length}`);
+    
     return movieLinks;
   }
 
@@ -370,10 +380,27 @@ export class ScraperService implements OnModuleDestroy {
     movieLink: string,
   ): Promise<MoviePageData> {
     const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(120000);
+    page.setDefaultNavigationTimeout(180000); // 3 minutos
+
+    // Definir User-Agent realista
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    );
 
     this.logger.log(`Raspando detalhes de: ${movieLink}`);
-    await page.goto(movieLink, { waitUntil: 'networkidle2' });
+    try {
+      await page.goto(movieLink, { waitUntil: 'networkidle2', timeout: 180000 }); // 3 minutos
+    } catch (e) {
+      this.logger.warn(`⚠️ Timeout com networkidle2, tentando com domcontentloaded: ${e.message}`);
+      try {
+        await page.goto(movieLink, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        this.logger.log('✅ Página do filme carregada com waitUntil: domcontentloaded.');
+      } catch (retryError) {
+        this.logger.error(`❌ Falha final ao carregar página do filme: ${retryError.message}`);
+        await page.close();
+        throw retryError;
+      }
+    }
 
     const pageData = await page.evaluate((s): MoviePageData => {
       const query = (selector: string, attribute = 'content') =>
@@ -485,51 +512,6 @@ export class ScraperService implements OnModuleDestroy {
 
       return { details, streaming };
     }, SELECTORS);
-
-    //registrar a duração obtida
-    if (pageData.details.duration) {
-      this.logger.log(`Duração capturada para '${pageData.details.title}': ${pageData.details.duration}`);
-    } else {
-      this.logger.warn(`Duração NÃO encontrada para '${pageData.details.title}'.`);
-    }
-    //registrar o rating obtido
-    if (pageData.details.rating) {
-      this.logger.log(`Rating capturado para '${pageData.details.title}': ${pageData.details.rating}`);
-    } else {
-      this.logger.warn(`Rating NÃO encontrado para '${pageData.details.title}'.`);
-    }
-    //registrar apenas os gêneros
-    this.logger.log(`Gêneros do filme '${pageData.details.title}': ${pageData.details.genres.join(', ')}`);
-    
-    // Log detalhado de gêneros com slugs
-    if (pageData.details.genres.length > 0) {
-      this.logger.log('Detalhes dos gêneros:');
-      pageData.details.genres.forEach(genreName => {
-        this.logger.log(`- ${genreName} => slug: ${this.createSlugFromName(genreName)}`);
-      });
-    }
-    
-    //registrar country e language
-    this.logger.log(`Country do filme '${pageData.details.title}': ${pageData.details.country.join(', ')}`);
-    
-    // Log detalhado de países com slugs
-    if (pageData.details.country.length > 0) {
-      this.logger.log('Detalhes dos países:');
-      pageData.details.country.forEach(countryName => {
-        this.logger.log(`- ${countryName} => slug: ${this.createSlugFromName(countryName)}`);
-      });
-    }
-    
-    this.logger.log(`Language do filme '${pageData.details.title}': ${pageData.details.language.join(', ')}`);
-    
-    // Log detalhado de idiomas com slugs
-    if (pageData.details.language.length > 0) {
-      this.logger.log('Detalhes dos idiomas:');
-      pageData.details.language.forEach(languageName => {
-        this.logger.log(`- ${languageName} => slug: ${this.createSlugFromName(languageName)}`);
-      });
-    }
-
 
     await page.close();
     return pageData;
