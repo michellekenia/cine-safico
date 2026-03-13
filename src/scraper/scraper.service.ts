@@ -302,14 +302,7 @@ export class ScraperService implements OnModuleDestroy {
     page.setDefaultNavigationTimeout(120000);
 
     this.logger.log(`Navegando para a lista de filmes: ${listLink}`);
-    try {
-      await page.goto(listLink, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      this.logger.log('✅ Página carregada com sucesso.');
-    } catch (e) {
-      this.logger.error(`❌ Erro ao navegar para a lista: ${e.message}`);
-      await page.close();
-      return [];
-    }
+    await page.goto(listLink, { waitUntil: 'networkidle2' });
 
     const movieLinks: { href: string; poster: string | null }[] = [];
     let hasNextPage = true;
@@ -317,69 +310,50 @@ export class ScraperService implements OnModuleDestroy {
 
     while (hasNextPage) {
       this.logger.log(`Analisando página da lista: ${pageCount}...`);
-      try {
-        await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 12000 });
-      } catch (e) {
-        this.logger.warn(`Timeout ou erro ao esperar seletor de filme: ${e.message}`);
-      }
+      await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 120000 }); // Aumentar timeout para 2 minutos
 
-      this.logger.log('Iniciando scroll para carregar todos os filmes (lazy loading)...');
-      try {
-        await autoScroll(page);
-      } catch (e) {
-        this.logger.warn(`Erro ao fazer scroll: ${e.message}`);
-      }
+      this.logger.log(
+        'Iniciando scroll para carregar todos os filmes (lazy loading)...',
+      );
+      await autoScroll(page);
       this.logger.log('Scroll finalizado.');
 
-      let linksOnPage: { href: string; poster: string | null }[] = [];
-      try {
-        linksOnPage = await page.evaluate(() => {
-          return Array.from(document.querySelectorAll('ul.poster-list li')).map((li) => {
-            const a = li.querySelector('a.frame');
-            const href = a ? (a as HTMLAnchorElement).href : null;
-            const img = li.querySelector('img');
-            let poster = null;
-            if (img) {
-              const srcset = img.getAttribute('srcset');
-              if (srcset) {
-                poster = srcset.split(',').pop()?.trim().split(' ')[0] || null;
-              } else {
-                poster = img.getAttribute('src');
-              }
+      const linksOnPage = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('ul.poster-list li')).map((li) => {
+          const a = li.querySelector('a.frame');
+          const href = a ? (a as HTMLAnchorElement).href : null;
+          const img = li.querySelector('img');
+          let poster = null;
+          if (img) {
+            const srcset = img.getAttribute('srcset');
+            if (srcset) {
+              // Pega a última URL do srcset (maior resolução)
+              poster = srcset.split(',').pop()?.trim().split(' ')[0] || null;
+            } else {
+              poster = img.getAttribute('src');
             }
-            return { href, poster };
-          });
+          }
+          return { href, poster };
         });
-      } catch (e) {
-        this.logger.error(`Erro ao extrair links da página: ${e.message}`);
-      }
-      this.logger.log(`Coletados ${linksOnPage.length} filmes nesta página.`);
+      });
       movieLinks.push(...linksOnPage);
+      this.logger.log(`Coletados ${linksOnPage.length} filmes nesta página.`);
 
       // Lógica de paginação para o teste
-      let nextButton = null;
-      try {
-        nextButton = await page.$(SELECTORS.list.nextPageButton);
-      } catch (e) {
-        this.logger.warn(`Erro ao buscar botão de próxima página: ${e.message}`);
-      }
+      const nextButton = await page.$(SELECTORS.list.nextPageButton);
+      // remover '&& pageCount < 1' para a raspagem completa
       if (nextButton) {
         this.logger.log(
           `Navegando da página ${pageCount} para a ${pageCount + 1}...`,
         );
-        try {
-          await Promise.all([
-            nextButton.click(),
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }),
-          ]);
-          await new Promise((resolve) =>
-            setTimeout(resolve, 2000 + Math.random() * 3000),
-          );
-          pageCount++;
-        } catch (e) {
-          this.logger.warn(`Erro na navegação para próxima página: ${e.message}`);
-          hasNextPage = false;
-        }
+        await Promise.all([
+          nextButton.click(),
+          page.waitForNavigation({ waitUntil: 'networkidle2' }),
+        ]);
+        await new Promise((resolve) =>
+          setTimeout(resolve, 2000 + Math.random() * 3000),
+        );
+        pageCount++;
       } else {
         this.logger.log('Não há mais páginas para navegar.');
         hasNextPage = false;
@@ -399,13 +373,7 @@ export class ScraperService implements OnModuleDestroy {
     page.setDefaultNavigationTimeout(120000);
 
     this.logger.log(`Raspando detalhes de: ${movieLink}`);
-    try {
-      await page.goto(movieLink, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    } catch (e) {
-      this.logger.error(`Erro ao navegar para página do filme: ${e.message}`);
-      await page.close();
-      throw e;
-    }
+    await page.goto(movieLink, { waitUntil: 'networkidle2' });
 
     const pageData = await page.evaluate((s): MoviePageData => {
       const query = (selector: string, attribute = 'content') =>
