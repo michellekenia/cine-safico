@@ -19,6 +19,7 @@ export interface MovieDetails {
   genres: string[];
   country: string[];
   language: string[];
+  alternativeTitles: string[];
 }
 
 export interface StreamingService {
