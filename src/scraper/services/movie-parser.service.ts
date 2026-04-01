@@ -121,7 +121,8 @@ export class MovieParserService implements IMovieParser {
 
         // Tentar ir para próxima página
         const nextButton = await page.$(SELECTORS.list.nextPageButton);
-        if (nextButton && pageCount < 1) { 
+        //Para testes usar após nextButton ->  && pageCount < 1
+        if (nextButton) { 
           try {
             await nextButton.click();
             await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 15000 });
