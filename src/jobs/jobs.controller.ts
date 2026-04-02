@@ -27,7 +27,7 @@ export class JobsController {
     // Dispara o job em segundo plano e retorna uma resposta imediata
     Promise.resolve().then(async () => {
       try {
-        await this.scraperService.scrapeMovies('https://letterboxd.com/mih_kenia/list/lista1/');
+        await this.scraperService.scrapeMovies('https://letterboxd.com/osasco12/list/saficos/');
         this.logger.log('Job de Scraping concluído com sucesso.');
       } catch (error) {
         this.logger.error(`Erro durante o scraping: ${error.message}`);
