@@ -12,6 +12,7 @@ model ScrapedMovie {
   id          String     @id @default(cuid())
   slug        String     @unique
   title       String
+  alternativeTitles String[] @default([])
   releaseDate String?
   director    String?
   synopsisEn  String?    @db.Text

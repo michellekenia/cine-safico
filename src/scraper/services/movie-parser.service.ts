@@ -121,12 +121,11 @@ export class MovieParserService implements IMovieParser {
 
         // Tentar ir para próxima página
         const nextButton = await page.$(SELECTORS.list.nextPageButton);
-        if (nextButton) {
+        //Para testes usar após nextButton ->  && pageCount < 1
+        if (nextButton) { 
           try {
-            await Promise.all([
-              nextButton.click(),
-              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 180000 }),
-            ]);
+            await nextButton.click();
+            await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 15000 });
             await new Promise((resolve) =>
               setTimeout(resolve, 2000 + Math.random() * 3000),
             );
@@ -245,6 +244,82 @@ export class MovieParserService implements IMovieParser {
               }
             }
             return languages;
+          })(),
+          alternativeTitles: (() => {
+            const detailsTab = document.querySelector('#tab-details');
+            let altTitles: string[] = [];
+            
+            if (detailsTab) {
+              const h3s = Array.from(detailsTab.querySelectorAll('h3'));
+              for (const h3 of h3s) {
+                const h3Text = h3.textContent?.trim().toLowerCase();
+                if (h3Text === 'alternative titles') {
+                  // Log para debug: encontrou a seção
+                  console.log('[DEBUG] Seção "Alternative Titles" encontrada');
+                  
+                  let next = h3.nextElementSibling;
+                  let elementIndex = 0;
+                  
+                  // Procurar por diferentes estruturas HTML
+                  while (next) {
+                    elementIndex++;
+                    const tagName = next.tagName;
+                    const textContent = next.textContent?.trim() || '';
+                    
+                    console.log(`[DEBUG] Elemento ${elementIndex}: <${tagName}> = "${textContent.substring(0, 100)}"`);
+                    
+                    if (tagName === 'H3') {
+                      console.log('[DEBUG] Encontrado outro H3, parando busca');
+                      break; // Parou em outra seção
+                    }
+                    
+                    // Procurar por texto com títulos
+                    if (textContent && !textContent.startsWith('•')) {
+                      console.log('[DEBUG] Texto extraído:', textContent);
+                      
+                      // Tentar diferentes separadores: "/" ou "," ou quebra de linha
+                      let rawTitles: string[] = [];
+                      
+                      // Dividir por "/" primeiro (formato comum)
+                      if (textContent.includes('/')) {
+                        rawTitles = textContent
+                          .split(/\s*\/\s*/)
+                          .map((t) => t.trim())
+                          .filter((t) => t.length > 0 && t !== '');
+                      }
+                      // Se não houver "/", tentar ","
+                      else if (textContent.includes(',')) {
+                        rawTitles = textContent
+                          .split(/\s*,\s*/)
+                          .map((t) => t.trim())
+                          .filter((t) => t.length > 0 && t !== '');
+                      }
+                      // Se não houver separadores, considerar como um único título
+                      else if (textContent.length > 0) {
+                        rawTitles = [textContent];
+                      }
+                      
+                      console.log('[DEBUG] Títulos extraídos:', rawTitles);
+                      altTitles = altTitles.concat(rawTitles);
+                      break;
+                    }
+                    
+                    next = next.nextElementSibling;
+                  }
+                  
+                  if (elementIndex === 0) {
+                    console.log('[DEBUG] Nenhum elemento encontrado após "Alternative Titles"');
+                  }
+                }
+              }
+            } else {
+              console.log('[DEBUG] Tab de detalhes (#tab-details) não encontrada');
+            }
+            
+            // Remover duplicatas mantendo ordem
+            const uniqueTitles = Array.from(new Set(altTitles));
+            console.log('[DEBUG] Títulos únicos finais:', uniqueTitles);
+            return uniqueTitles;
           })(),
         };
 

@@ -28,6 +28,7 @@ export class MovieDetailsResponseDto {
   id: string;
   slug: string;
   title: string;
+  alternativeTitles: string[];
   releaseDate: string | null;
   director: string | null;
   synopsisEn: string | null;
