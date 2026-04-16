@@ -46,6 +46,7 @@ export class MovieStorageService implements IMovieStorage {
         data: {
           slug: movie.slug,
           title: movie.details.title,
+          originalTitle: movie.details.originalTitle || null,
           alternativeTitles: movie.details.alternativeTitles,
           releaseDate: movie.details.releaseYear,
           director: movie.details.director,

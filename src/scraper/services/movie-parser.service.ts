@@ -10,6 +10,7 @@ const SELECTORS = {
   },
   moviePage: {
     title: 'meta[property="og:title"]',
+    originalTitle: 'h2.originalname',
     director: 'meta[name="twitter:data1"]',
     synopsis: 'meta[name="description"]',
     posterImageSrc: '.poster .film-poster img',
@@ -49,13 +50,13 @@ export class MovieParserService implements IMovieParser {
     try {
       this.logger.log(`Navegando para lista: ${listUrl}`);
 
-      // Tentar com networkidle2 primeiro, se falhar tenta com domcontentloaded
+      // Tentar com networkidle2 (mais rígido) primeiro, depois domcontentloaded (mais rápido)
       try {
-        await page.goto(listUrl, { waitUntil: 'networkidle2', timeout: 180000 });
+        await page.goto(listUrl, { waitUntil: 'networkidle2', timeout: 60000 });
         this.logger.log('✅ Página carregada com networkidle2');
       } catch (e) {
-        this.logger.warn(`⏳ Tentando recarregar com domcontentloaded: ${e.message}`);
-        await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        this.logger.warn(`⏳ Timeout com networkidle2, tentando domcontentloaded...`);
+        await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
         this.logger.log('✅ Página carregada com domcontentloaded');
       }
 
@@ -71,7 +72,7 @@ export class MovieParserService implements IMovieParser {
 
         // Aguardar seletor ou prosseguir se não encontrar
         try {
-          await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 60000 });
+          await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 15000 });
         } catch (e) {
           const elementCount = await page.evaluate(() => {
             return document.querySelectorAll('ul.poster-list li').length;
@@ -122,7 +123,7 @@ export class MovieParserService implements IMovieParser {
         // Tentar ir para próxima página
         const nextButton = await page.$(SELECTORS.list.nextPageButton);
         //Para testes usar após nextButton ->  && pageCount < 1
-        if (nextButton) { 
+        if (nextButton && pageCount < 1) {
           try {
             await nextButton.click();
             await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 15000 });
@@ -158,12 +159,12 @@ export class MovieParserService implements IMovieParser {
     try {
       this.logger.log(`Raspando detalhes de: ${movieUrl}`);
 
-      // Tentar com networkidle2 primeiro
+      // Tentar com networkidle2 (mais rígido) primeiro, depois domcontentloaded (mais rápido)
       try {
-        await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 180000 });
+        await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 45000 });
       } catch (e) {
-        this.logger.warn(`⏳ Timeout com networkidle2, tentando domcontentloaded: ${e.message}`);
-        await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        this.logger.warn(`⏳ Timeout com networkidle2, tentando domcontentloaded...`);
+        await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
       }
 
       const pageData = await page.evaluate((s): MoviePageData => {
@@ -175,6 +176,16 @@ export class MovieParserService implements IMovieParser {
             const rawTitle = query(s.moviePage.title);
             if (!rawTitle) return null;
             return rawTitle.replace(/\s*\(\d{4}\)$/, '').trim();
+          })(),
+          originalTitle: (() => {
+            const el = document.querySelector(s.moviePage.originalTitle);
+            const value = el?.textContent?.trim() || null;
+            if (value) {
+              console.log(`[DEBUG] originalTitle encontrado: ${value}`);
+            } else {
+              console.log(`[DEBUG] originalTitle NÃO encontrado (seletor: ${s.moviePage.originalTitle})`);
+            }
+            return value;
           })(),
           director: query(s.moviePage.director),
           synopsis: query(s.moviePage.synopsis),
@@ -365,17 +376,18 @@ export class MovieParserService implements IMovieParser {
     await page.evaluate(async () => {
       await new Promise<void>((resolve) => {
         let totalHeight = 0;
-        const distance = 100;
+        const distance = 150;
+        const maxScroll = 5000; // Máximo de scroll em pixels
         const timer = setInterval(() => {
           const scrollHeight = document.body.scrollHeight;
           window.scrollBy(0, distance);
           totalHeight += distance;
 
-          if (totalHeight >= scrollHeight) {
+          if (totalHeight >= scrollHeight || totalHeight >= maxScroll) {
             clearInterval(timer);
             resolve();
           }
-        }, 100);
+        }, 50); // Aumenta velocidade do scroll
       });
     });
   }

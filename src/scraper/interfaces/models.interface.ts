@@ -10,6 +10,7 @@ export interface MovieLink {
 
 export interface MovieDetails {
   title: string | null;
+  originalTitle: string | null;
   releaseYear: string | null;
   director: string | null;
   synopsis: string | null;
