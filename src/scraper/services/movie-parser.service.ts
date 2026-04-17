@@ -123,7 +123,7 @@ export class MovieParserService implements IMovieParser {
         // Tentar ir para próxima página
         const nextButton = await page.$(SELECTORS.list.nextPageButton);
         //Para testes usar após nextButton ->  && pageCount < 1
-        if (nextButton && pageCount < 1) {
+        if (nextButton) {
           try {
             await nextButton.click();
             await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 15000 });
@@ -197,7 +197,21 @@ export class MovieParserService implements IMovieParser {
             }
             return img?.getAttribute('src') || null;
           })(),
-          releaseYear: document.querySelector(s.moviePage.releaseYear)?.textContent || null,
+          releaseYear: (() => {
+            // Extrair o ano de lançamento
+            const yearEl = document.querySelector(s.moviePage.releaseYear);
+            if (!yearEl) return null;
+            
+            const yearText = yearEl.textContent?.trim() || '';
+            console.log(`[DEBUG] releaseYear bruto: "${yearText}"`);
+            
+            // Se for um ano como "2024" ou "2024 •", extrair apenas os 4 dígitos
+            const yearMatch = yearText.match(/(\d{4})/);
+            const extracted = yearMatch ? yearMatch[1] : yearText || null;
+            console.log(`[DEBUG] releaseYear extraído: "${extracted}"`);
+            
+            return extracted;
+          })(),
           duration: (() => {
             const el = document.querySelector('p.text-link.text-footer');
             if (!el) return null;
@@ -260,71 +274,71 @@ export class MovieParserService implements IMovieParser {
             const detailsTab = document.querySelector('#tab-details');
             let altTitles: string[] = [];
             
-            if (detailsTab) {
-              const h3s = Array.from(detailsTab.querySelectorAll('h3'));
-              for (const h3 of h3s) {
-                const h3Text = h3.textContent?.trim().toLowerCase();
-                if (h3Text === 'alternative titles') {
-                  // Log para debug: encontrou a seção
-                  console.log('[DEBUG] Seção "Alternative Titles" encontrada');
+            if (!detailsTab) {
+              console.log('[DEBUG] Tab de detalhes (#tab-details) não encontrada');
+              return altTitles;
+            }
+            
+            // Procurar pelo h3 com texto "Alternative Titles"
+            const h3s = Array.from(detailsTab.querySelectorAll('h3'));
+            for (const h3 of h3s) {
+              const h3Text = h3.textContent?.trim().toLowerCase();
+              if (h3Text === 'alternative titles' || h3Text?.includes('alternative title')) {
+                console.log('[DEBUG] Seção "Alternative Titles" encontrada');
+                
+                // Procurar pelos elementos seguintes até encontrar outro h3 ou fim da seção
+                let current = h3.nextElementSibling;
+                let foundContent = false;
+                
+                while (current) {
+                  // Se encontrou outro h3, parou
+                  if (current.tagName === 'H3') {
+                    console.log('[DEBUG] Encontrado outro H3, parando busca');
+                    break;
+                  }
                   
-                  let next = h3.nextElementSibling;
-                  let elementIndex = 0;
+                  const content = current.textContent?.trim() || '';
                   
-                  // Procurar por diferentes estruturas HTML
-                  while (next) {
-                    elementIndex++;
-                    const tagName = next.tagName;
-                    const textContent = next.textContent?.trim() || '';
-                    
-                    console.log(`[DEBUG] Elemento ${elementIndex}: <${tagName}> = "${textContent.substring(0, 100)}"`);
-                    
-                    if (tagName === 'H3') {
-                      console.log('[DEBUG] Encontrado outro H3, parando busca');
-                      break; // Parou em outra seção
-                    }
-                    
-                    // Procurar por texto com títulos
-                    if (textContent && !textContent.startsWith('•')) {
-                      console.log('[DEBUG] Texto extraído:', textContent);
+                  // Procurar por divs ou parágrafos com conteúdo
+                  if (current.tagName === 'DIV' || current.tagName === 'P') {
+                    if (content && content.length > 0) {
+                      console.log('[DEBUG] Conteúdo encontrado:', content);
+                      foundContent = true;
                       
-                      // Tentar diferentes separadores: "/" ou "," ou quebra de linha
+                      // Tentar extrair títulos separados por "/" ou ","
                       let rawTitles: string[] = [];
                       
-                      // Dividir por "/" primeiro (formato comum)
-                      if (textContent.includes('/')) {
-                        rawTitles = textContent
+                      if (content.includes('/')) {
+                        rawTitles = content
                           .split(/\s*\/\s*/)
                           .map((t) => t.trim())
-                          .filter((t) => t.length > 0 && t !== '');
-                      }
-                      // Se não houver "/", tentar ","
-                      else if (textContent.includes(',')) {
-                        rawTitles = textContent
+                          .filter((t) => t.length > 0);
+                      } else if (content.includes(',')) {
+                        rawTitles = content
                           .split(/\s*,\s*/)
                           .map((t) => t.trim())
-                          .filter((t) => t.length > 0 && t !== '');
-                      }
-                      // Se não houver separadores, considerar como um único título
-                      else if (textContent.length > 0) {
-                        rawTitles = [textContent];
+                          .filter((t) => t.length > 0);
+                      } else {
+                        // Se não há separadores visíveis, pode ser um único título em múltiplas linhas
+                        rawTitles = content
+                          .split(/[\n\r]+/)
+                          .map((t) => t.trim())
+                          .filter((t) => t.length > 0);
                       }
                       
                       console.log('[DEBUG] Títulos extraídos:', rawTitles);
                       altTitles = altTitles.concat(rawTitles);
-                      break;
+                      break; // Sair após encontrar conteúdo
                     }
-                    
-                    next = next.nextElementSibling;
                   }
                   
-                  if (elementIndex === 0) {
-                    console.log('[DEBUG] Nenhum elemento encontrado após "Alternative Titles"');
-                  }
+                  current = current.nextElementSibling;
+                }
+                
+                if (!foundContent) {
+                  console.log('[DEBUG] Nenhum conteúdo encontrado após "Alternative Titles"');
                 }
               }
-            } else {
-              console.log('[DEBUG] Tab de detalhes (#tab-details) não encontrada');
             }
             
             // Remover duplicatas mantendo ordem
