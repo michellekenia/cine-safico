@@ -9,26 +9,28 @@ datasource db {
 }
 
 model ScrapedMovie {
-  id          String     @id @default(cuid())
-  slug        String     @unique
-  title       String
-  originalTitle String?
-  alternativeTitles String[] @default([])
-  releaseDate String?
-  director    String?
-  synopsisEn  String?    @db.Text
-  synopsisPt  String?    @db.Text
-  posterImage String?    @db.Text
-  duration    String?
-  rating      String?
-  genres      Genre[]
-  country     Country[]
-  language    Language[]
-  scrapedAt   DateTime   @default(now())
-
-  streamingServices StreamingService[]
-  
-  streamingPlatforms StreamingPlatform[]
+  id                 String              @id @default(cuid())
+  slug               String              @unique
+  title              String
+  alternativeTitles  String[]            @default([])
+  originalTitle      String?
+  alternativeTitlePt String?
+  releaseDate        String?
+  director           String?
+  synopsisEn         String?
+  synopsisPt         String?
+  posterImage        String?
+  duration           String?
+  rating             String?
+  scrapedAt          DateTime            @default(now())
+  countryPt          String[]
+  genresPt           String[]
+  languagePt         String[]
+  streamingServices  StreamingService[]
+  country            Country[]           @relation("CountryToScrapedMovie")
+  genres             Genre[]             @relation("GenreToScrapedMovie")
+  language           Language[]          @relation("LanguageToScrapedMovie")
+  streamingPlatforms StreamingPlatform[] @relation("ScrapedMovieToStreamingPlatform")
 }
 
 model Genre {
@@ -37,7 +39,7 @@ model Genre {
   nomePt     String?
   slug       String         @unique
   isFeatured Boolean        @default(false)
-  movies     ScrapedMovie[]
+  movies     ScrapedMovie[] @relation("GenreToScrapedMovie")
 }
 
 model Country {
@@ -45,7 +47,7 @@ model Country {
   nome   String         @unique
   nomePt String?
   slug   String         @unique
-  movies ScrapedMovie[]
+  movies ScrapedMovie[] @relation("CountryToScrapedMovie")
 }
 
 model Language {
@@ -53,27 +55,26 @@ model Language {
   nome   String         @unique
   nomePt String?
   slug   String         @unique
-  movies ScrapedMovie[]
+  movies ScrapedMovie[] @relation("LanguageToScrapedMovie")
 }
 
 model StreamingService {
   id             String       @id @default(cuid())
   service        String
-  link           String       @db.Text
-  scrapedMovie   ScrapedMovie @relation(fields: [scrapedMovieId], references: [id], onDelete: Cascade)
+  link           String
   scrapedMovieId String
+  scrapedMovie   ScrapedMovie @relation(fields: [scrapedMovieId], references: [id], onDelete: Cascade)
 }
 
 model StreamingPlatform {
-  id          String   @id @default(cuid())
-  nome        String   @unique
-  slug        String   @unique
-  categoria   String   // "principal", "brasileira", "nicho", "gratuita", "digital", "internacional"
-  isFeatured  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  movies      ScrapedMovie[]
+  id         String         @id @default(cuid())
+  nome       String         @unique
+  slug       String         @unique
+  categoria  String
+  isFeatured Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  movies     ScrapedMovie[] @relation("ScrapedMovieToStreamingPlatform")
 
   @@map("StreamingPlatform")
 }

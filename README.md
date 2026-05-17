@@ -420,7 +420,3 @@ JOB_TRIGGER_SECRET="sua-chave-secreta"
 
 - Michelle Kenia - Desenvolvedora Principal - [@michellekenia](https://github.com/michellekenia)
 
----
-
-**🏳️‍🌈 Feito com amor para a comunidade LBT 💜**
-
