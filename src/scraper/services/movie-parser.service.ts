@@ -132,7 +132,8 @@ export class MovieParserService implements IMovieParser {
             );
             pageCount++;
           } catch (navError) {
-            this.logger.warn(`⚠️ Erro na navegação: ${navError.message}`);
+            const errorMessage = navError instanceof Error ? navError.message : String(navError);
+            this.logger.warn(`⚠️ Erro na navegação: ${errorMessage}`);
             hasNextPage = false;
           }
         } else {

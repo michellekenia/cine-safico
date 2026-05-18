@@ -28,7 +28,7 @@ export class JobsController {
         await this.scraperService.scrapeMovies('https://letterboxd.com/osasco12/list/saficos/');
         this.logger.log('Job de Scraping concluído com sucesso.');
       } catch (error) {
-        this.logger.error(`Erro durante o scraping: ${error.message}`);
+        this.logger.error(`Erro durante o scraping: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
@@ -49,7 +49,7 @@ export class JobsController {
         await this.translationService.translateMetadata();
         this.logger.log('Job de Tradução de metadados concluído com sucesso.');
       } catch (error) {
-        this.logger.error(`Erro durante a tradução de metadados: ${error.message}`);
+        this.logger.error(`Erro durante a tradução de metadados: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
@@ -70,7 +70,7 @@ export class JobsController {
         const count = await this.translationService.translateSynopses();
         this.logger.log(`Job de Tradução de sinopses concluído com sucesso. ${count} sinopses traduzidas.`);
       } catch (error) {
-        this.logger.error(`Erro durante a tradução de sinopses: ${error.message}`);
+        this.logger.error(`Erro durante a tradução de sinopses: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
@@ -90,7 +90,7 @@ export class JobsController {
         await this.movieUpdater.updateNullFields(url);
         this.logger.log('Job de atualização de campos nulos concluído com sucesso.');
       } catch (error) {
-        this.logger.error(`Falha na atualização de campos nulos: ${error.message}`);
+        this.logger.error(`Falha na atualização de campos nulos: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 

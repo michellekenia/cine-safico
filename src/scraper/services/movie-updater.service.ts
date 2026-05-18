@@ -44,7 +44,7 @@ export class MovieUpdaterService {
 
       return updatedMovies;
     } catch (error) {
-      this.logger.error(`Erro crítico na atualização: ${error.message}`);
+      this.logger.error(`Erro crítico na atualização: ${this.formatError(error)}`);
       throw error;
     } finally {
       await this.browserProvider.close();
@@ -84,7 +84,7 @@ export class MovieUpdaterService {
           streaming: pageData.streaming,
         });
       } catch (error) {
-        this.logger.error(`Falha ao scrape ${href}: ${error.message}`);
+        this.logger.error(`Falha ao scrape ${href}: ${this.formatError(error)}`);
       }
     }
 
@@ -101,11 +101,15 @@ export class MovieUpdaterService {
           updatedMovies.push(updated);
         }
       } catch (error) {
-        this.logger.error(`Falha ao persistir ${movieData.slug}: ${error.message}`);
+        this.logger.error(`Falha ao persistir ${movieData.slug}: ${this.formatError(error)}`);
       }
     }
 
     return updatedMovies;
+  }
+
+  private formatError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   private extractSlugFromUrl(url: string): string | null {
