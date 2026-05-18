@@ -24,6 +24,12 @@ const SELECTORS = {
   },
 };
 
+const NAVIGATION_TIMEOUTS = {
+  list: 45000,
+  detail: 45000,
+  detailFallback: 60000,
+};
+
 /**
  * MovieParserService
  * Responsável por extrair dados do HTML de filmes
@@ -52,12 +58,12 @@ export class MovieParserService implements IMovieParser {
 
       // Tentar com networkidle2 (mais rígido) primeiro, depois domcontentloaded (mais rápido)
       try {
-        await page.goto(listUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-        this.logger.log('✅ Página carregada com networkidle2');
-      } catch (e) {
-        this.logger.warn(`⏳ Timeout com networkidle2, tentando domcontentloaded...`);
-        await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: NAVIGATION_TIMEOUTS.list });
         this.logger.log('✅ Página carregada com domcontentloaded');
+      } catch (e) {
+        this.logger.warn(`⏳ Timeout com domcontentloaded, tentando load...`);
+        await page.goto(listUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUTS.detailFallback });
+        this.logger.log('✅ Página carregada com load');
       }
 
       // Esperar renderização de conteúdo dinâmico
@@ -66,6 +72,7 @@ export class MovieParserService implements IMovieParser {
       const movieLinks: MovieLink[] = [];
       let hasNextPage = true;
       let pageCount = 1;
+      const testPageLimit = Number(process.env.SCRAPER_TEST_PAGE_LIMIT ?? '0');
 
       while (hasNextPage) {
         this.logger.log(`📄 Analisando página ${pageCount}...`);
@@ -123,7 +130,7 @@ export class MovieParserService implements IMovieParser {
         // Tentar ir para próxima página
         const nextButton = await page.$(SELECTORS.list.nextPageButton);
         //Para testes usar após nextButton ->  && pageCount < 1
-        if (nextButton) {
+        if (nextButton && pageCount < 1) {
           try {
             await nextButton.click();
             await page.waitForSelector(SELECTORS.list.movieFrame, { timeout: 15000 });
@@ -160,12 +167,13 @@ export class MovieParserService implements IMovieParser {
     try {
       this.logger.log(`Raspando detalhes de: ${movieUrl}`);
 
-      // Tentar com networkidle2 (mais rígido) primeiro, depois domcontentloaded (mais rápido)
+      // networkidle2 costuma travar em sites com requests persistentes; domcontentloaded é mais estável.
       try {
-        await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+        await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: NAVIGATION_TIMEOUTS.detail });
+        await page.waitForSelector('body', { timeout: 10000 });
       } catch (e) {
-        this.logger.warn(`⏳ Timeout com networkidle2, tentando domcontentloaded...`);
-        await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+        this.logger.warn('⏳ Timeout com domcontentloaded, tentando load com timeout maior...');
+        await page.goto(movieUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUTS.detailFallback });
       }
 
       const pageData = await page.evaluate((s): MoviePageData => {

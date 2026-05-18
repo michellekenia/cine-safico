@@ -16,17 +16,18 @@ export class JobsController {
   ) {}
 
   @Post('/trigger-scraper')
-  async triggerScraper() {
+  async triggerScraper(@Query('url') url: string = 'https://letterboxd.com/osasco12/list/saficos/') {
     const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
       throw new ForbiddenException('Scraping job is currently disabled.');
     }
 
-    //https://letterboxd.com/osasco12/list/saficos/
+    const targetUrl = url?.trim() || 'https://letterboxd.com/osasco12/list/saficos/';
+
     // Dispara o job em segundo plano e retorna uma resposta imediata
     setTimeout(async () => {
       try {
-        await this.scraperService.scrapeMovies('');
+        await this.scraperService.scrapeMovies(targetUrl);
         this.logger.log('Job de Scraping concluído com sucesso.');
       } catch (error) {
         this.logger.error(`Erro durante o scraping: ${error instanceof Error ? error.message : String(error)}`);
@@ -34,7 +35,10 @@ export class JobsController {
     }, 0);
 
     this.logger.log('Job de Scraping disparado com sucesso.');
-    return { message: 'Scraping job triggered successfully in the background.' };
+    return {
+      message: 'Scraping job triggered successfully in the background.',
+      url: targetUrl,
+    };
   }
 
   @Post('trigger-translator-metadata')
@@ -80,7 +84,7 @@ export class JobsController {
   }
 
   @Post('/trigger-scraper-update')
-  async updateNullFields(@Query('url') url: string = 'https://letterboxd.com/mih_kenia/list/lista2/') {
+  async updateNullFields(@Query('url') url: string = 'https://letterboxd.com/osasco12/list/saficos/') {
     const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
       throw new ForbiddenException('Scraping job is currently disabled.');
