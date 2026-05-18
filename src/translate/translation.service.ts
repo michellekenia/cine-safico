@@ -50,7 +50,8 @@ export class TranslationService {
         // Pausa entre traduções para não sobrecarregar a API
         await new Promise((res) => setTimeout(res, 2000));
       } catch (e) {
-        this.logger.error(`Erro ao traduzir sinopse do filme ID ${movie.id}: ${e.message}`);
+        const message = e instanceof Error ? e.message : String(e);
+        this.logger.error(`Erro ao traduzir sinopse do filme ID ${movie.id}: ${message}`);
       }
     }
 
@@ -129,7 +130,8 @@ export class TranslationService {
         // Aguarda um pouco para evitar exceder limites da API de tradução
         await new Promise((res) => setTimeout(res, 1000));
       } catch (e) {
-        this.logger.error(`Erro ao traduzir gênero '${genero.nome}': ${e.message}`);
+        const message = e instanceof Error ? e.message : String(e);
+        this.logger.error(`Erro ao traduzir gênero '${genero.nome}': ${message}`);
       }
     }
 
@@ -177,7 +179,8 @@ export class TranslationService {
         // Aguarda um pouco para evitar exceder limites da API de tradução
         await new Promise((res) => setTimeout(res, 1000));
       } catch (e) {
-        this.logger.error(`Erro ao traduzir país '${pais.nome}': ${e.message}`);
+        const message = e instanceof Error ? e.message : String(e);
+        this.logger.error(`Erro ao traduzir país '${pais.nome}': ${message}`);
       }
     }
 
@@ -225,7 +228,8 @@ export class TranslationService {
         // Aguarda um pouco para evitar exceder limites da API de tradução
         await new Promise((res) => setTimeout(res, 1000));
       } catch (e) {
-        this.logger.error(`Erro ao traduzir idioma '${idioma.nome}': ${e.message}`);
+        const message = e instanceof Error ? e.message : String(e);
+        this.logger.error(`Erro ao traduzir idioma '${idioma.nome}': ${message}`);
       }
     }
 

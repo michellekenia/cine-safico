@@ -7,6 +7,10 @@ import { SlugService } from './services/slug.service';
  * Função auxiliar para retry com backoff exponencial
  * Executa uma ação com múltiplas tentativas em caso de erro
  */
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function scrapeWithRetries<T>(
   action: () => Promise<T>,
   maxRetries: number,
@@ -17,7 +21,7 @@ async function scrapeWithRetries<T>(
     try {
       return await action();
     } catch (error) {
-      logger.warn(`Tentativa ${attempt} falhou para ${context}: ${error.message}`);
+      logger.warn(`Tentativa ${attempt} falhou para ${context}: ${formatErrorMessage(error)}`);
       if (attempt === maxRetries) {
         logger.error(
           `Todas as ${maxRetries} tentativas falharam para ${context}. Desistindo.`,
@@ -132,9 +136,7 @@ export class ScraperService implements IScraper {
 
           moviesToSave.push(movieData);
         } catch (error) {
-          this.logger.error(
-            `Falha ao processar ${href} após todas as tentativas: ${error.message}`,
-          );
+          this.logger.error(`Falha ao processar ${href} após todas as tentativas: ${formatErrorMessage(error)}`);
         }
       }
 
@@ -144,9 +146,7 @@ export class ScraperService implements IScraper {
 
       return savedMovies;
     } catch (error) {
-      this.logger.error(
-        `❌ Erro crítico durante a raspagem: ${error.message}`,
-      );
+      this.logger.error(`❌ Erro crítico durante a raspagem: ${formatErrorMessage(error)}`);
       return [];
     } finally {
       // 5. Fechar navegador
