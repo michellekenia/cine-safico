@@ -7,6 +7,10 @@ import { SlugService } from './services/slug.service';
  * Função auxiliar para retry com backoff exponencial
  * Executa uma ação com múltiplas tentativas em caso de erro
  */
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function scrapeWithRetries<T>(
   action: () => Promise<T>,
   maxRetries: number,
@@ -17,7 +21,8 @@ async function scrapeWithRetries<T>(
     try {
       return await action();
     } catch (error) {
-      logger.warn(`Tentativa ${attempt} falhou para ${context}: ${error.message}`);
+      const message = formatErrorMessage(error);
+      logger.warn(`Tentativa ${attempt} falhou para ${context}: ${message}`);
       if (attempt === maxRetries) {
         logger.error(
           `Todas as ${maxRetries} tentativas falharam para ${context}. Desistindo.`,
@@ -25,7 +30,9 @@ async function scrapeWithRetries<T>(
         throw error;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+      const isNavigationTimeout = message.toLowerCase().includes('navigation timeout');
+      const delayMs = isNavigationTimeout ? 15000 * attempt : 2000 * attempt;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
   throw new Error('Lógica de retries falhou inesperadamente.');
@@ -70,13 +77,14 @@ export class ScraperService implements IScraper {
    * @returns Array de filmes salvos
    */
   async scrapeMovies(listLink: string): Promise<ScrapedMovieRecord[]> {
-    this.logger.log(`Iniciando processo de raspagem da lista: ${listLink}`);
+    const normalizedListLink = this.normalizeAndValidateListUrl(listLink);
+    this.logger.log(`Iniciando processo de raspagem da lista: ${normalizedListLink}`);
 
     const browser = await this.browserProvider.launch();
 
     try {
       // 1. Extrair links de filmes
-      const movieLinks = await this.movieParser.extractLinks(browser, listLink);
+      const movieLinks = await this.movieParser.extractLinks(browser, normalizedListLink);
       this.logger.log(`Encontrados ${movieLinks.length} filmes na lista`);
 
       if (movieLinks.length === 0) {
@@ -98,6 +106,7 @@ export class ScraperService implements IScraper {
 
       // 3. Extrair detalhes de cada filme com retry
       const moviesToSave: MovieData[] = [];
+      let consecutiveNavigationTimeouts = 0;
 
       for (const { href, poster } of newMovieLinks) {
         const slug = this.extractSlugFromUrl(href);
@@ -110,6 +119,8 @@ export class ScraperService implements IScraper {
             this.logger,
             `filme ${slug}`,
           );
+
+          consecutiveNavigationTimeouts = 0;
 
           // Validar se título foi extraído
           if (!pageData.details.title) {
@@ -132,9 +143,20 @@ export class ScraperService implements IScraper {
 
           moviesToSave.push(movieData);
         } catch (error) {
-          this.logger.error(
-            `Falha ao processar ${href} após todas as tentativas: ${error.message}`,
-          );
+          const message = formatErrorMessage(error);
+          this.logger.error(`Falha ao processar ${href} após todas as tentativas: ${message}`);
+
+          if (message.toLowerCase().includes('navigation timeout')) {
+            consecutiveNavigationTimeouts++;
+
+            if (consecutiveNavigationTimeouts >= 3) {
+              this.logger.warn('Muitas falhas de navegação em sequência. Pausando 60s para reduzir bloqueio/rate limit.');
+              await new Promise((resolve) => setTimeout(resolve, 60000));
+              consecutiveNavigationTimeouts = 0;
+            }
+          } else {
+            consecutiveNavigationTimeouts = 0;
+          }
         }
       }
 
@@ -144,9 +166,7 @@ export class ScraperService implements IScraper {
 
       return savedMovies;
     } catch (error) {
-      this.logger.error(
-        `❌ Erro crítico durante a raspagem: ${error.message}`,
-      );
+      this.logger.error(`❌ Erro crítico durante a raspagem: ${formatErrorMessage(error)}`);
       return [];
     } finally {
       // 5. Fechar navegador
@@ -167,6 +187,26 @@ export class ScraperService implements IScraper {
       return match ? match[1] : null;
     } catch {
       return null;
+    }
+  }
+
+  private normalizeAndValidateListUrl(listLink: string): string {
+    const trimmed = (listLink || '').trim();
+
+    if (!trimmed) {
+      throw new Error('A URL da lista está vazia. Informe uma URL válida do Letterboxd.');
+    }
+
+    const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+    try {
+      const parsed = new URL(withProtocol);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new Error('Protocolo inválido');
+      }
+      return parsed.toString();
+    } catch {
+      throw new Error(`URL da lista inválida: "${listLink}"`);
     }
   }
 }

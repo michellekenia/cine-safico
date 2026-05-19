@@ -55,8 +55,9 @@ export class BrowserService implements IBrowserProvider, OnModuleDestroy {
       this.browser = await puppeteer.launch(launchOptions);
       this.logger.log('✅ Navegador iniciado com sucesso');
       return this.browser;
-    } catch (error) {
-      this.logger.error(`❌ Erro ao iniciar navegador: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`❌ Erro ao iniciar navegador: ${message}`);
       throw error;
     }
   }
@@ -74,8 +75,9 @@ export class BrowserService implements IBrowserProvider, OnModuleDestroy {
       await this.browser.close();
       this.browser = null;
       this.logger.log('✅ Navegador fechado com sucesso');
-    } catch (error) {
-      this.logger.error(`❌ Erro ao fechar navegador: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`❌ Erro ao fechar navegador: ${message}`);
       throw error;
     }
   }

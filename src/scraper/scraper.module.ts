@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from 'src/adapters/prisma.module';
 import { ScraperService } from './scraper.service';
+import { MovieUpdaterService } from './services/movie-updater.service';
 import { BrowserService } from './services/browser.service';
 import { MovieParserService } from './services/movie-parser.service';
 import { MovieStorageService } from './services/movie-storage.service';
@@ -26,6 +27,7 @@ import { BROWSER_PROVIDER, MOVIE_PARSER, MOVIE_STORAGE } from './interfaces/scra
     MovieParserService,
     MovieStorageService,
     ScraperService,
+    MovieUpdaterService,
     // Registrar interfaces com tokens para injeção de dependência
     {
       provide: BROWSER_PROVIDER,
@@ -40,6 +42,6 @@ import { BROWSER_PROVIDER, MOVIE_PARSER, MOVIE_STORAGE } from './interfaces/scra
       useClass: MovieStorageService,
     },
   ],
-  exports: [ScraperService],
+  exports: [ScraperService, MovieUpdaterService],
 })
 export class ScraperModule {}

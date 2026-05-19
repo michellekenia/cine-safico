@@ -47,8 +47,10 @@ export interface IMovieParser {
  */
 export interface IMovieStorage {
   findExistingSlugs(slugs: string[]): Promise<string[]>;
+  findMoviesWithNullFields(): Promise<string[]>;
   saveMovie(movie: MovieData): Promise<ScrapedMovieRecord>;
   saveMovies(movies: MovieData[]): Promise<ScrapedMovieRecord[]>;
+  updateNullFieldsOnly(movie: MovieData): Promise<ScrapedMovieRecord | null>;
   optimizePosterUrl(posterUrl: string | null): string | null;
 }
 

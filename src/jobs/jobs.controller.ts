@@ -1,50 +1,50 @@
 import { TranslationService } from "src/translate/translation.service";
 import { ScraperService } from "src/scraper/scraper.service";
+import { MovieUpdaterService } from "src/scraper/services/movie-updater.service";
 import { ConfigService } from "@nestjs/config";
-import { Logger, Post, ForbiddenException, Controller } from "@nestjs/common";
+import { Logger, Post, ForbiddenException, Controller, Query } from "@nestjs/common";
 
 @Controller('scraper')
 export class JobsController {
-    private readonly logger = new Logger(JobsController.name);
+  private readonly logger = new Logger(JobsController.name);
 
   constructor(
     private readonly translationService: TranslationService,
     private readonly scraperService: ScraperService,
+    private readonly movieUpdater: MovieUpdaterService,
     private readonly configService: ConfigService,
-
   ) {}
 
   @Post('/trigger-scraper')
-  async triggerScraper() {
-    this.logger.log('Recebendo requisição do scraping');
-
+  async triggerScraper(@Query('url') url: string = 'https://letterboxd.com/osasco12/list/saficos/') {
     const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
-      this.logger.warn('Job de Scraping está desabilitado. Nenhuma ação tomada.');
       throw new ForbiddenException('Scraping job is currently disabled.');
     }
+
+    const targetUrl = url?.trim() || 'https://letterboxd.com/osasco12/list/saficos/';
 
     // Dispara o job em segundo plano e retorna uma resposta imediata
     setTimeout(async () => {
       try {
-        await this.scraperService.scrapeMovies('https://letterboxd.com/osasco12/list/saficos/');
+        await this.scraperService.scrapeMovies(targetUrl);
         this.logger.log('Job de Scraping concluído com sucesso.');
       } catch (error) {
-        this.logger.error(`Erro durante o scraping: ${error.message}`);
+        this.logger.error(`Erro durante o scraping: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
     this.logger.log('Job de Scraping disparado com sucesso.');
-    return { message: 'Scraping job triggered successfully in the background.' };
+    return {
+      message: 'Scraping job triggered successfully in the background.',
+      url: targetUrl,
+    };
   }
 
   @Post('trigger-translator-metadata')
   async triggerTranslatorMetadata() {
-    this.logger.log('Recebida requisição para iniciar o job de tradução de metadados...');
-
     const isJobEnabled = this.configService.get('TRANSLATION_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
-      this.logger.warn('Job de Tradução está desabilitado. Nenhuma ação tomada.');
       throw new ForbiddenException('Translation job is currently disabled.');
     }
 
@@ -54,7 +54,7 @@ export class JobsController {
         await this.translationService.translateMetadata();
         this.logger.log('Job de Tradução de metadados concluído com sucesso.');
       } catch (error) {
-        this.logger.error(`Erro durante a tradução de metadados: ${error.message}`);
+        this.logger.error(`Erro durante a tradução de metadados: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
@@ -64,11 +64,8 @@ export class JobsController {
 
   @Post('trigger-translator-synopses')
   async triggerTranslatorSynopses() {
-    this.logger.log('Recebida requisição para iniciar o job de tradução de sinopses...');
-
     const isJobEnabled = this.configService.get('TRANSLATION_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
-      this.logger.warn('Job de Tradução está desabilitado. Nenhuma ação tomada.');
       throw new ForbiddenException('Translation job is currently disabled.');
     }
 
@@ -78,11 +75,34 @@ export class JobsController {
         const count = await this.translationService.translateSynopses();
         this.logger.log(`Job de Tradução de sinopses concluído com sucesso. ${count} sinopses traduzidas.`);
       } catch (error) {
-        this.logger.error(`Erro durante a tradução de sinopses: ${error.message}`);
+        this.logger.error(`Erro durante a tradução de sinopses: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
     this.logger.log('Job de Tradução de sinopses disparado em segundo plano.');
     return { message: 'Synopses translation job triggered successfully in the background.' };
+  }
+
+  @Post('/trigger-scraper-update')
+  async updateNullFields(@Query('url') url: string = 'https://letterboxd.com/osasco12/list/saficos/') {
+    const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
+    if (!isJobEnabled) {
+      throw new ForbiddenException('Scraping job is currently disabled.');
+    }
+
+    setTimeout(async () => {
+      try {
+        await this.movieUpdater.updateNullFields(url);
+        this.logger.log('Job de atualização de campos nulos concluído com sucesso.');
+      } catch (error) {
+        this.logger.error(`Falha na atualização de campos nulos: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }, 0);
+
+    this.logger.log('Job de atualização de campos nulos disparado em segundo plano.');
+    return {
+      message: 'Update null fields job triggered successfully in the background.',
+      url,
+    };
   }
 }

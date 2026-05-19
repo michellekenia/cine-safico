@@ -5,11 +5,6 @@ import { MovieData, ScrapedMovieRecord } from '../interfaces/models.interface';
 import { SlugService } from './slug.service';
 import { ScrapedMovie } from '@prisma/client';
 
-/**
- * MovieStorageService
- * Responsável por persistência de filmes no banco de dados
- * Handles salvamento de filmes, gêneros, países, idiomas e serviços de streaming
- */
 @Injectable()
 export class MovieStorageService implements IMovieStorage {
   private readonly logger = new Logger(MovieStorageService.name);
@@ -19,11 +14,6 @@ export class MovieStorageService implements IMovieStorage {
     private readonly slugService: SlugService,
   ) {}
 
-  /**
-   * Verifica quais slugs já existem no banco de dados
-   * @param slugs - Array de slugs a verificar
-   * @returns Array com slugs que já existem
-   */
   async findExistingSlugs(slugs: string[]): Promise<string[]> {
     if (slugs.length === 0) return [];
 
@@ -35,17 +25,28 @@ export class MovieStorageService implements IMovieStorage {
     return existing.map((m) => m.slug);
   }
 
-  /**
-   * Salva um único filme no banco de dados
-   * @param movie - Dados do filme a salvar
-   * @returns Filme salvo com ID
-   */
+  async findMoviesWithNullFields(): Promise<string[]> {
+    const moviesWithNulls = await this.prisma.scrapedMovie.findMany({
+      where: {
+        OR: [
+          { originalTitle: null },
+          { originalTitle: '' },
+          { alternativeTitles: { equals: [] } },
+        ],
+      },
+      select: { slug: true },
+    });
+
+    return moviesWithNulls.map((m) => m.slug);
+  }
+
   async saveMovie(movie: MovieData): Promise<ScrapedMovieRecord> {
     try {
       const savedMovie = await this.prisma.scrapedMovie.create({
         data: {
           slug: movie.slug,
           title: movie.details.title,
+          originalTitle: movie.details.originalTitle || null,
           alternativeTitles: movie.details.alternativeTitles,
           releaseDate: movie.details.releaseYear,
           director: movie.details.director,
@@ -86,19 +87,13 @@ export class MovieStorageService implements IMovieStorage {
         },
       });
 
-      this.logger.log(`✅ Filme salvo: ${savedMovie.slug}`);
       return this.mapToRecord(savedMovie);
     } catch (error) {
-      this.logger.error(`❌ Erro ao salvar filme ${movie.slug}: ${error.message}`);
+      this.logger.error(`Falha ao salvar ${movie.slug}: ${String(error)}`);
       throw error;
     }
   }
 
-  /**
-   * Salva múltiplos filmes no banco de dados
-   * @param movies - Array de filmes a salvar
-   * @returns Array de filmes salvos
-   */
   async saveMovies(movies: MovieData[]): Promise<ScrapedMovieRecord[]> {
     const saved: ScrapedMovieRecord[] = [];
 
@@ -106,21 +101,39 @@ export class MovieStorageService implements IMovieStorage {
       try {
         const record = await this.saveMovie(movie);
         saved.push(record);
-      } catch (error) {
-        this.logger.error(`⚠️ Falha ao salvar ${movie.slug}, continuando com próximo...`);
-        // Continuar com próximo filme em caso de erro
+      } catch {
+        // Continua com próximo filme
       }
     }
 
-    this.logger.log(`✅ ${saved.length}/${movies.length} filmes salvos com sucesso`);
     return saved;
   }
 
-  /**
-   * Otimiza URL de poster para maior resolução
-   * @param posterUrl - URL do poster original
-   * @returns URL otimizada ou URL original se não for Letterboxd
-   */
+  async updateNullFieldsOnly(movie: MovieData): Promise<ScrapedMovieRecord | null> {
+    try {
+      const existingMovie = await this.findExistingMovie(movie.slug);
+      if (!existingMovie) {
+        return null;
+      }
+
+      const dataToUpdate = this.prepareScalarFieldUpdates(existingMovie, movie);
+
+      if (Object.keys(dataToUpdate).length === 0) {
+        return this.mapToRecord(existingMovie);
+      }
+
+      const updatedMovie = await this.prisma.scrapedMovie.update({
+        where: { slug: movie.slug },
+        data: dataToUpdate,
+      });
+
+      return this.mapToRecord(updatedMovie);
+    } catch (error) {
+      this.logger.error(`Falha ao atualizar ${movie.slug}: ${String(error)}`);
+      throw error;
+    }
+  }
+
   optimizePosterUrl(posterUrl: string | null): string | null {
     if (!posterUrl?.includes('ltrbxd.com/resized/film-poster')) {
       return posterUrl;
@@ -135,9 +148,37 @@ export class MovieStorageService implements IMovieStorage {
     return posterUrl;
   }
 
-  /**
-   * Mapeia dados do Prisma para ScrapedMovieRecord
-   */
+  private async findExistingMovie(slug: string): Promise<ScrapedMovie | null> {
+    return this.prisma.scrapedMovie.findUnique({
+      where: { slug },
+    });
+  }
+
+  private prepareScalarFieldUpdates(existingMovie: any, newMovie: MovieData): Record<string, any> {
+    const dataToUpdate: Record<string, any> = {};
+
+    if (this.shouldUpdateField(existingMovie.originalTitle, newMovie.details.originalTitle)) {
+      dataToUpdate.originalTitle = newMovie.details.originalTitle;
+    }
+
+    if (this.shouldUpdateField(existingMovie.alternativeTitles, newMovie.details.alternativeTitles)) {
+      dataToUpdate.alternativeTitles = newMovie.details.alternativeTitles;
+    }
+
+    return dataToUpdate;
+  }
+
+  private isNullOrEmpty(value: any): boolean {
+    if (value === null || value === undefined) return true;
+    if (typeof value === 'string') return value.trim() === '';
+    if (Array.isArray(value)) return value.length === 0;
+    return false;
+  }
+
+  private shouldUpdateField(existing: any, newValue: any): boolean {
+    return this.isNullOrEmpty(existing) && !this.isNullOrEmpty(newValue);
+  }
+
   private mapToRecord(movie: ScrapedMovie): ScrapedMovieRecord {
     return {
       id: movie.id,
