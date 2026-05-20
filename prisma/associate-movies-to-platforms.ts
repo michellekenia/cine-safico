@@ -138,7 +138,7 @@ async function main() {
         console.log(`✅ ${movie.title}: conectado a [${Array.from(platformSlugs).join(', ')}]`);
       } catch (error) {
         errorCount++;
-        console.error(`❌ Erro ao processar ${movie.title}:`, error.message);
+        console.error(`❌ Erro ao processar ${movie.title}:`, error instanceof Error ? error.message : String(error));
       }
     } else {
       console.log(`⚠️ ${movie.title}: nenhuma plataforma identificada`);

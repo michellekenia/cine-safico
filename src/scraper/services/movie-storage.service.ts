@@ -89,7 +89,7 @@ export class MovieStorageService implements IMovieStorage {
 
       return this.mapToRecord(savedMovie);
     } catch (error) {
-      this.logger.error(`Falha ao salvar ${movie.slug}: ${error.message}`);
+      this.logger.error(`Falha ao salvar ${movie.slug}: ${String(error)}`);
       throw error;
     }
   }
@@ -129,7 +129,7 @@ export class MovieStorageService implements IMovieStorage {
 
       return this.mapToRecord(updatedMovie);
     } catch (error) {
-      this.logger.error(`Falha ao atualizar ${movie.slug}`, error);
+      this.logger.error(`Falha ao atualizar ${movie.slug}: ${String(error)}`);
       throw error;
     }
   }

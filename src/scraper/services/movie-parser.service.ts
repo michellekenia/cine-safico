@@ -24,6 +24,12 @@ const SELECTORS = {
   },
 };
 
+const NAVIGATION_TIMEOUTS = {
+  list: 45000,
+  detail: 45000,
+  detailFallback: 60000,
+};
+
 /**
  * MovieParserService
  * Responsável por extrair dados do HTML de filmes
@@ -52,12 +58,12 @@ export class MovieParserService implements IMovieParser {
 
       // Tentar com networkidle2 (mais rígido) primeiro, depois domcontentloaded (mais rápido)
       try {
-        await page.goto(listUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-        this.logger.log('✅ Página carregada com networkidle2');
-      } catch (e) {
-        this.logger.warn(`⏳ Timeout com networkidle2, tentando domcontentloaded...`);
-        await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(listUrl, { waitUntil: 'domcontentloaded', timeout: NAVIGATION_TIMEOUTS.list });
         this.logger.log('✅ Página carregada com domcontentloaded');
+      } catch (e) {
+        this.logger.warn(`⏳ Timeout com domcontentloaded, tentando load...`);
+        await page.goto(listUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUTS.detailFallback });
+        this.logger.log('✅ Página carregada com load');
       }
 
       // Esperar renderização de conteúdo dinâmico
@@ -66,6 +72,7 @@ export class MovieParserService implements IMovieParser {
       const movieLinks: MovieLink[] = [];
       let hasNextPage = true;
       let pageCount = 1;
+      const testPageLimit = Number(process.env.SCRAPER_TEST_PAGE_LIMIT ?? '0');
 
       while (hasNextPage) {
         this.logger.log(`📄 Analisando página ${pageCount}...`);
@@ -132,7 +139,8 @@ export class MovieParserService implements IMovieParser {
             );
             pageCount++;
           } catch (navError) {
-            this.logger.warn(`⚠️ Erro na navegação: ${navError.message}`);
+            const errorMessage = navError instanceof Error ? navError.message : String(navError);
+            this.logger.warn(`⚠️ Erro na navegação: ${errorMessage}`);
             hasNextPage = false;
           }
         } else {
@@ -159,12 +167,13 @@ export class MovieParserService implements IMovieParser {
     try {
       this.logger.log(`Raspando detalhes de: ${movieUrl}`);
 
-      // Tentar com networkidle2 (mais rígido) primeiro, depois domcontentloaded (mais rápido)
+      // networkidle2 costuma travar em sites com requests persistentes; domcontentloaded é mais estável.
       try {
-        await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+        await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: NAVIGATION_TIMEOUTS.detail });
+        await page.waitForSelector('body', { timeout: 10000 });
       } catch (e) {
-        this.logger.warn(`⏳ Timeout com networkidle2, tentando domcontentloaded...`);
-        await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+        this.logger.warn('⏳ Timeout com domcontentloaded, tentando load com timeout maior...');
+        await page.goto(movieUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUTS.detailFallback });
       }
 
       const pageData = await page.evaluate((s): MoviePageData => {
@@ -271,80 +280,54 @@ export class MovieParserService implements IMovieParser {
             return languages;
           })(),
           alternativeTitles: (() => {
-            const detailsTab = document.querySelector('#tab-details');
             let altTitles: string[] = [];
             
-            if (!detailsTab) {
-              console.log('[DEBUG] Tab de detalhes (#tab-details) não encontrada');
-              return altTitles;
-            }
-            
-            // Procurar pelo h3 com texto "Alternative Titles"
-            const h3s = Array.from(detailsTab.querySelectorAll('h3'));
-            for (const h3 of h3s) {
-              const h3Text = h3.textContent?.trim().toLowerCase();
-              if (h3Text === 'alternative titles' || h3Text?.includes('alternative title')) {
+            // Procurar pelo h3 com "Alternative Titles"
+            const headings = Array.from(document.querySelectorAll('h3'));
+            for (const heading of headings) {
+              const headingText = heading.textContent?.trim().toLowerCase() || '';
+              if (headingText.includes('alternative title')) {
                 console.log('[DEBUG] Seção "Alternative Titles" encontrada');
                 
-                // Procurar pelos elementos seguintes até encontrar outro h3 ou fim da seção
-                let current = h3.nextElementSibling;
-                let foundContent = false;
+                // Procurar pelo div.text-indentedlist mais próximo
+                let current = heading.nextElementSibling;
+                let searchLimit = 5;
                 
-                while (current) {
-                  // Se encontrou outro h3, parou
-                  if (current.tagName === 'H3') {
-                    console.log('[DEBUG] Encontrado outro H3, parando busca');
+                while (current && searchLimit > 0) {
+                  searchLimit--;
+                  
+                  // Se encontrar outro heading, parar
+                  if (/^h[1-6]$/i.test(current?.tagName || '')) {
                     break;
                   }
                   
-                  const content = current.textContent?.trim() || '';
-                  
-                  // Procurar por divs ou parágrafos com conteúdo
-                  if (current.tagName === 'DIV' || current.tagName === 'P') {
-                    if (content && content.length > 0) {
-                      console.log('[DEBUG] Conteúdo encontrado:', content);
-                      foundContent = true;
+                  // Procurar por div.text-indentedlist
+                  if (current?.classList.contains('text-indentedlist')) {
+                    const p = current.querySelector('p');
+                    if (p) {
+                      const content = p.textContent?.trim() || '';
+                      console.log('[DEBUG] Conteúdo encontrado em text-indentedlist:', content);
                       
-                      // Tentar extrair títulos separados por "/" ou ","
-                      let rawTitles: string[] = [];
-                      
-                      if (content.includes('/')) {
-                        rawTitles = content
-                          .split(/\s*\/\s*/)
-                          .map((t) => t.trim())
-                          .filter((t) => t.length > 0);
-                      } else if (content.includes(',')) {
-                        rawTitles = content
-                          .split(/\s*,\s*/)
-                          .map((t) => t.trim())
-                          .filter((t) => t.length > 0);
-                      } else {
-                        // Se não há separadores visíveis, pode ser um único título em múltiplas linhas
-                        rawTitles = content
-                          .split(/[\n\r]+/)
-                          .map((t) => t.trim())
-                          .filter((t) => t.length > 0);
+                      if (content.length > 0) {
+                        // Dividir por vírgula e limpar espaços
+                        altTitles = content
+                          .split(',')
+                          .map((title) => title.trim())
+                          .filter((title) => title.length > 0);
+                        
+                        console.log('[DEBUG] Títulos extraídos:', altTitles);
+                        return altTitles;
                       }
-                      
-                      console.log('[DEBUG] Títulos extraídos:', rawTitles);
-                      altTitles = altTitles.concat(rawTitles);
-                      break; // Sair após encontrar conteúdo
                     }
                   }
                   
-                  current = current.nextElementSibling;
-                }
-                
-                if (!foundContent) {
-                  console.log('[DEBUG] Nenhum conteúdo encontrado após "Alternative Titles"');
+                  current = current?.nextElementSibling;
                 }
               }
             }
             
-            // Remover duplicatas mantendo ordem
-            const uniqueTitles = Array.from(new Set(altTitles));
-            console.log('[DEBUG] Títulos únicos finais:', uniqueTitles);
-            return uniqueTitles;
+            console.log('[DEBUG] Nenhum título alternativo encontrado');
+            return altTitles;
           })(),
         };
 

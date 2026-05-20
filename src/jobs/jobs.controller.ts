@@ -19,24 +19,29 @@ export class JobsController {
   ) {}
 
   @Post('/trigger-scraper')
-  async triggerScraper() {
+  async triggerScraper(@Query('url') url: string = 'https://letterboxd.com/mih_kenia/list/lista2/') {
     const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
       throw new ForbiddenException('Scraping job is currently disabled.');
     }
 
+      const targetUrl = url?.trim() || 'https://letterboxd.com/osasco12/list/saficos/';
+
     // Dispara o job em segundo plano e retorna uma resposta imediata
     setTimeout(async () => {
       try {
-        await this.scraperService.scrapeMovies('https://letterboxd.com/mih_kenia/list/lista2/');
+        await this.scraperService.scrapeMovies(targetUrl);
         this.logger.log('Job de Scraping concluído com sucesso.');
       } catch (error) {
-        this.logger.error(`Erro durante o scraping: ${error.message}`);
+        this.logger.error(`Erro durante o scraping: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
     this.logger.log('Job de Scraping disparado com sucesso.');
-    return { message: 'Scraping job triggered successfully in the background.' };
+    return {
+      message: 'Scraping job triggered successfully in the background.',
+      url: targetUrl,
+    };
   }
 
   @Post('trigger-translator-metadata')
@@ -52,7 +57,7 @@ export class JobsController {
         await this.translationService.translateMetadata();
         this.logger.log('Job de Tradução de metadados concluído com sucesso.');
       } catch (error) {
-        this.logger.error(`Erro durante a tradução de metadados: ${error.message}`);
+        this.logger.error(`Erro durante a tradução de metadados: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
@@ -73,7 +78,7 @@ export class JobsController {
         const count = await this.translationService.translateSynopses();
         this.logger.log(`Job de Tradução de sinopses concluído com sucesso. ${count} sinopses traduzidas.`);
       } catch (error) {
-        this.logger.error(`Erro durante a tradução de sinopses: ${error.message}`);
+        this.logger.error(`Erro durante a tradução de sinopses: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
@@ -82,7 +87,7 @@ export class JobsController {
   }
 
   @Post('/trigger-scraper-update')
-  async updateNullFields(@Query('url') url: string = 'https://letterboxd.com/osasco12/list/saficos/') {
+  async updateNullFields(@Query('url') url: string = 'https://letterboxd.com/mih_kenia/list/lista2/') {
     const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
       throw new ForbiddenException('Scraping job is currently disabled.');
@@ -93,7 +98,7 @@ export class JobsController {
         await this.movieUpdater.updateNullFields(url);
         this.logger.log('Job de atualização de campos nulos concluído com sucesso.');
       } catch (error) {
-        this.logger.error(`Falha na atualização de campos nulos: ${error.message}`);
+        this.logger.error(`Falha na atualização de campos nulos: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 0);
 
@@ -142,7 +147,7 @@ export class JobsController {
         message: 'Análise de títulos PT-BR concluída',
       };
     } catch (error) {
-      this.logger.error(`Erro durante análise de títulos PT-BR: ${error.message}`);
+      this.logger.error(`Erro durante análise de títulos PT-BR: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
