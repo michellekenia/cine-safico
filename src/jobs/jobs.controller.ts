@@ -2,7 +2,9 @@ import { TranslationService } from "src/translate/translation.service";
 import { ScraperService } from "src/scraper/scraper.service";
 import { MovieUpdaterService } from "src/scraper/services/movie-updater.service";
 import { ConfigService } from "@nestjs/config";
-import { Logger, Post, ForbiddenException, Controller, Query } from "@nestjs/common";
+import { Logger, Post, ForbiddenException, Controller, Query, Body } from "@nestjs/common";
+import { TitleAnalysisService } from "src/scraper/services/title-analysis-service";
+import { PrismaService } from "src/adapters/prisma.service";
 
 @Controller('scraper')
 export class JobsController {
@@ -13,16 +15,17 @@ export class JobsController {
     private readonly scraperService: ScraperService,
     private readonly movieUpdater: MovieUpdaterService,
     private readonly configService: ConfigService,
+    private readonly prismaService: PrismaService,
   ) {}
 
   @Post('/trigger-scraper')
-  async triggerScraper(@Query('url') url: string = 'https://letterboxd.com/osasco12/list/saficos/') {
+  async triggerScraper(@Query('url') url: string = 'https://letterboxd.com/mih_kenia/list/lista2/') {
     const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
       throw new ForbiddenException('Scraping job is currently disabled.');
     }
 
-    const targetUrl = url?.trim() || 'https://letterboxd.com/osasco12/list/saficos/';
+      const targetUrl = url?.trim() || 'https://letterboxd.com/osasco12/list/saficos/';
 
     // Dispara o job em segundo plano e retorna uma resposta imediata
     setTimeout(async () => {
@@ -84,7 +87,7 @@ export class JobsController {
   }
 
   @Post('/trigger-scraper-update')
-  async updateNullFields(@Query('url') url: string = 'https://letterboxd.com/osasco12/list/saficos/') {
+  async updateNullFields(@Query('url') url: string = 'https://letterboxd.com/mih_kenia/list/lista2/') {
     const isJobEnabled = this.configService.get('SCRAPER_JOB_ENABLED') === 'true';
     if (!isJobEnabled) {
       throw new ForbiddenException('Scraping job is currently disabled.');
@@ -104,5 +107,48 @@ export class JobsController {
       message: 'Update null fields job triggered successfully in the background.',
       url,
     };
+  }
+
+  @Post('ptbr-titles')
+  async analyzePtBrTitles() {
+    try {
+      const movies = await this.prismaService.scrapedMovie.findMany();
+      if (!movies.length) {
+        return {
+          total: 0,
+          updated: 0,
+          withValidTitles: 0,
+          message: 'Nenhum filme encontrado no banco de dados',
+        };
+      }
+
+      const results = TitleAnalysisService.processDatabaseTitles(movies);
+      let updated = 0;
+      const updatedMovies: any[] = [];
+
+      // Atualiza apenas filmes com título PT-BR válido
+      for (const movie of results) {
+        if (!movie.titlePtBr) continue;
+        await this.prismaService.scrapedMovie.update({
+          where: { id: movie.id },
+          data: { alternativeTitlePt: movie.titlePtBr },
+        });
+        updated++;
+        updatedMovies.push({ id: movie.id, title: movie.title, titlePtBr: movie.titlePtBr });
+      }
+
+      return {
+        total: movies.length,
+        updated,
+        withValidTitles: updated,
+        skipped: movies.length - updated,
+        successRate: `${((updated / movies.length) * 100).toFixed(2)}%`,
+        updatedMovies: updatedMovies.slice(0, 50),
+        message: 'Análise de títulos PT-BR concluída',
+      };
+    } catch (error) {
+      this.logger.error(`Erro durante análise de títulos PT-BR: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 }
