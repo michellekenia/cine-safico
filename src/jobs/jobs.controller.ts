@@ -25,7 +25,7 @@ export class JobsController {
       throw new ForbiddenException('Scraping job is currently disabled.');
     }
 
-      const targetUrl = url?.trim() || 'https://letterboxd.com/osasco12/list/saficos/';
+      const targetUrl = url?.trim() || 'https://letterboxd.com/mih_kenia/list/lista2/';
 
     // Dispara o job em segundo plano e retorna uma resposta imediata
     setTimeout(async () => {
