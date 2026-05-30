@@ -131,7 +131,7 @@ export class JobsController {
         if (!movie.titlePtBr) continue;
         await this.prismaService.scrapedMovie.update({
           where: { id: movie.id },
-          data: { titlePt: movie.titlePtBr },
+          data: { alternativeTitlePt: movie.titlePtBr },
         });
         updated++;
         updatedMovies.push({ id: movie.id, title: movie.title, titlePtBr: movie.titlePtBr });

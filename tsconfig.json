@@ -11,6 +11,7 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "types": ["node"],
     "skipLibCheck": true,
     "strictNullChecks": false,
     "noImplicitAny": false,
