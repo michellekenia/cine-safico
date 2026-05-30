@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "ScrapedMovie" ADD COLUMN     "titlePt" TEXT,
+ALTER COLUMN "countryPt" DROP DEFAULT,
+ALTER COLUMN "genresPt" DROP DEFAULT,
+ALTER COLUMN "languagePt" DROP DEFAULT;
