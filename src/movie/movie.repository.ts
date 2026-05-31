@@ -110,12 +110,13 @@ export class MovieRepository {
   ): Prisma.ScrapedMovieWhereInput {
     const whereClause: Prisma.ScrapedMovieWhereInput = {};
     
-    // Filtro por termo de busca
+    // Filtro por termo de busca em múltiplos campos
     if (search) {
-      whereClause.title = {
-        contains: search,
-        mode: 'insensitive',
-      };
+      whereClause.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { alternativeTitlePt: { contains: search, mode: 'insensitive' } },
+        { originalTitle: { contains: search, mode: 'insensitive' } },
+      ];
     }
     
     // Filtro por gênero
@@ -197,7 +198,7 @@ export class MovieRepository {
     const conditions: string[] = [];
     
     if (search) {
-      conditions.push(`"title" ILIKE '%${search}%'`);
+      conditions.push(`("title" ILIKE '%${search}%' OR "alternativeTitlePt" ILIKE '%${search}%' OR "originalTitle" ILIKE '%${search}%')`);
     }
     
     if (genreSlug) {
