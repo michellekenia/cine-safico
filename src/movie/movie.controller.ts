@@ -36,10 +36,24 @@ export class MovieController {
     const orderBy = query.orderBy || 'rating';
     const order = query.order || 'DESC';
 
+    // Normalizar termo de busca:
+    // 1. Remover espaços extras no início/fim
+    // 2. Collapsar espaços internos múltiplos
+    // 3. Remover pontuação (pontos, vírgulas, etc)
+    // 4. Remover acentos
+    const normalizedSearch = query.search
+      ? query.search
+          .trim()
+          .replace(/\s+/g, ' ')                          // Collapsar espaços
+          .replace(/[.,!?;:'"()\-—–—]/g, '')            // Remover pontuação
+          .normalize('NFD')                              // Separar acentos
+          .replace(/[\u0300-\u036f]/g, '')              // Remover diacríticos
+      : undefined;
+
     return this.movieService.findAllPaginated(
       page, 
       pageSize, 
-      query.search,
+      normalizedSearch,
       query.genre,
       query.country,
       query.language,
