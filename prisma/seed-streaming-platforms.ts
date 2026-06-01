@@ -178,6 +178,18 @@ const streamingPlatforms = [
     categoria: 'gratuita',
     isFeatured: false,
   },
+  {
+    nome: 'YouTube',
+    slug: 'youtube',
+    categoria: 'gratuita',
+    isFeatured: false,
+  },
+  {
+    nome: 'Drive',
+    slug: 'drive',
+    categoria: 'gratuita',
+    isFeatured: false,
+  },
 
   // DIGITAIS
   {
