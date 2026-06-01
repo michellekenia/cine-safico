@@ -110,13 +110,31 @@ export class MovieRepository {
   ): Prisma.ScrapedMovieWhereInput {
     const whereClause: Prisma.ScrapedMovieWhereInput = {};
     
-    // Filtro por termo de busca em múltiplos campos
+    // Filtro por termo de busca em múltiplos campos (busca fuzzy)
     if (search) {
-      whereClause.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { alternativeTitlePt: { contains: search, mode: 'insensitive' } },
-        { originalTitle: { contains: search, mode: 'insensitive' } },
-      ];
+      // Quebrar em palavras: "floresraras" → ["flores", "raras"]
+      const searchWords = search
+        .replace(/([a-z])([A-Z])/g, '$1 $2')  // Separar camelCase
+        .split(/[\s\-_]+/)
+        .filter(word => word.length > 0);
+
+      // Se houver múltiplas palavras, procurar por cada uma (AND lógico)
+      if (searchWords.length > 1) {
+        whereClause.AND = searchWords.map(word => ({
+          OR: [
+            { title: { contains: word, mode: 'insensitive' } },
+            { alternativeTitlePt: { contains: word, mode: 'insensitive' } },
+            { originalTitle: { contains: word, mode: 'insensitive' } },
+          ],
+        }));
+      } else {
+        // Se uma palavra só, procurar normalmente
+        whereClause.OR = [
+          { title: { contains: search, mode: 'insensitive' } },
+          { alternativeTitlePt: { contains: search, mode: 'insensitive' } },
+          { originalTitle: { contains: search, mode: 'insensitive' } },
+        ];
+      }
     }
     
     // Filtro por gênero
@@ -197,8 +215,23 @@ export class MovieRepository {
   ): Prisma.Sql {
     const conditions: string[] = [];
     
+    // Busca fuzzy: quebrar em palavras
     if (search) {
-      conditions.push(`("title" ILIKE '%${search}%' OR "alternativeTitlePt" ILIKE '%${search}%' OR "originalTitle" ILIKE '%${search}%')`);
+      const searchWords = search
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .split(/[\s\-_]+/)
+        .filter(word => word.length > 0);
+
+      if (searchWords.length > 1) {
+        // Múltiplas palavras: procurar por cada uma (AND)
+        const wordConditions = searchWords.map(word => 
+          `("title" ILIKE '%${word}%' OR "alternativeTitlePt" ILIKE '%${word}%' OR "originalTitle" ILIKE '%${word}%')`
+        ).join(' AND ');
+        conditions.push(`(${wordConditions})`);
+      } else {
+        // Uma palavra só
+        conditions.push(`("title" ILIKE '%${search}%' OR "alternativeTitlePt" ILIKE '%${search}%' OR "originalTitle" ILIKE '%${search}%')`);
+      }
     }
     
     if (genreSlug) {
