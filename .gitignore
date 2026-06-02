@@ -45,6 +45,8 @@ lerna-debug.log*
 pids
 *.pid
 *.seed
+seed-youtube-links.ts
+seed-*.ts
 *.pid.lock
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
