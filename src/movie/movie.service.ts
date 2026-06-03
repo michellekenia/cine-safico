@@ -214,4 +214,42 @@ export class MovieService {
       maxYear: yearRange.max_year,
     };
   }
+
+  async findAllMovieLists(featured?: boolean) {
+    this.logger.log('Buscando listas de filmes...');
+    const lists = await this.movieRepository.findAllMovieLists(featured);
+    
+    return {
+      items: lists.map(list => ({
+        id: list.id,
+        title: list.title,
+        slug: list.slug,
+        description: list.description,
+        isFeatured: list.isFeatured,
+        totalMovies: list._count.movies,
+      })),
+      total: lists.length,
+    };
+  }
+
+  async findMovieListBySlug(slug: string, page: number, pageSize: number) {
+    this.logger.log(`Buscando lista: ${slug}`);
+    const result = await this.movieRepository.findMovieListBySlug(
+      slug,
+      page,
+      pageSize,
+    );
+
+    if (!result) {
+      throw new NotFoundException(`Lista não encontrada: ${slug}`);
+    }
+
+    return {
+      list: result.list,
+      data: result.movies,
+      total: result.total,
+      currentPage: result.currentPage,
+      totalPages: result.totalPages,
+    };
+  }
 }

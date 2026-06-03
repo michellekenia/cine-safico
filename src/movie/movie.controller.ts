@@ -114,6 +114,26 @@ export class MovieController {
     return this.movieService.findMoviesByLanguageSlug(slug, 5);
   }
 
+  // Endpoints de listas temáticas
+  @Get('lists-all')
+  async findAllMovieLists(@Query('featured') featured?: string) {
+    const isFeatured = featured === 'true' ? true : featured === 'false' ? false : undefined;
+    return this.movieService.findAllMovieLists(isFeatured);
+  }
+
+  @Get('lists/:slug')
+  async findMovieListBySlug(
+    @Param('slug') slug: string,
+    @Query('page') page: string = '1',
+    @Query('pageSize') pageSize: string = '12',
+  ) {
+    return this.movieService.findMovieListBySlug(
+      slug,
+      parseInt(page),
+      parseInt(pageSize),
+    );
+  }
+
   // Detalhes de um filme específico
   @Get(':slug') 
   async findBySlug(@Param() params: FindDetailsMovieDto) {

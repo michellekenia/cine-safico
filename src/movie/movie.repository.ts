@@ -558,4 +558,82 @@ async findManyByCountry(country: string, take: number) {
 
     return result[0] || { min_year: 1900, max_year: new Date().getFullYear() };
   }
+
+  async findAllMovieLists(featured?: boolean) {
+    const where = featured !== undefined ? { isFeatured: featured } : {};
+    
+    return this.prisma.movieList.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        isFeatured: true,
+        _count: {
+          select: { movies: true },
+        },
+      },
+      orderBy: { order: 'asc' },
+    });
+  }
+
+  async findMovieListBySlug(
+    slug: string,
+    page: number,
+    pageSize: number,
+  ) {
+    const list = await this.prisma.movieList.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        isFeatured: true,
+      },
+    });
+
+    if (!list) return null;
+
+    const [moviesResult, total] = await this.prisma.$transaction([
+      this.prisma.movieList.findUnique({
+        where: { slug },
+        select: {
+          movies: {
+            select: {
+              slug: true,
+              title: true,
+              releaseDate: true,
+              rating: true,
+              posterImage: true,
+              genres: {
+                select: {
+                  nomePt: true,
+                  slug: true,
+                },
+              },
+            },
+            take: pageSize,
+            skip: (page - 1) * pageSize,
+          },
+        },
+      }),
+      this.prisma.scrapedMovie.count({
+        where: {
+          lists: {
+            some: { slug },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      list,
+      movies: moviesResult?.movies || [],
+      total,
+      currentPage: page,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
 }
