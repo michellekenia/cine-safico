@@ -31,6 +31,7 @@ model ScrapedMovie {
   genres             Genre[]             @relation("GenreToScrapedMovie")
   language           Language[]          @relation("LanguageToScrapedMovie")
   streamingPlatforms StreamingPlatform[] @relation("ScrapedMovieToStreamingPlatform")
+  lists              MovieList[]         @relation("MovieListToScrapedMovie")
 }
 
 model Genre {
@@ -77,4 +78,16 @@ model StreamingPlatform {
   movies     ScrapedMovie[] @relation("ScrapedMovieToStreamingPlatform")
 
   @@map("StreamingPlatform")
+}
+
+model MovieList {
+  id          String         @id @default(cuid())
+  title       String
+  slug        String         @unique
+  description String?
+  isFeatured  Boolean        @default(false)
+  order       Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  movies      ScrapedMovie[] @relation("MovieListToScrapedMovie")
 }
