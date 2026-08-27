@@ -24,9 +24,46 @@ type PaginatedResult<T> = {
 };
 
 
+// Mapeamento de caracteres acentuados (minúsculos) para seus equivalentes sem acento.
+// Usado com a função nativa translate() do Postgres, evitando depender da extensão unaccent.
+const UNACCENT_FROM = 'àáâãäåèéêëìíîïòóôõöøùúûüçñýÿ';
+const UNACCENT_TO = 'aaaaaaeeeeiiiioooooouuuucnyy';
+
 @Injectable()
 export class MovieRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Busca os IDs de filmes cujo título (title, originalTitle, alternativeTitlePt
+   * ou qualquer item de alternativeTitles) bate com o termo de busca, ignorando acentos.
+   */
+  private async findMovieIdsMatchingSearch(search: string): Promise<string[]> {
+    const searchWords = search
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .split(/[\s\-_]+/)
+      .filter((word) => word.length > 0)
+      .map((word) => word.toLowerCase());
+
+    if (searchWords.length === 0) return [];
+
+    const wordConditions = searchWords.map(
+      (word) => Prisma.sql`(
+        translate(lower("title"), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
+        OR translate(lower(COALESCE("originalTitle", '')), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
+        OR translate(lower(COALESCE("alternativeTitlePt", '')), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
+        OR EXISTS (
+          SELECT 1 FROM unnest("alternativeTitles") AS alt
+          WHERE translate(lower(alt), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
+        )
+      )`,
+    );
+
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>(
+      Prisma.sql`SELECT "id" FROM "ScrapedMovie" WHERE ${Prisma.join(wordConditions, ' AND ')}`,
+    );
+
+    return rows.map((row) => row.id);
+  }
 
   async findAllPaginated(
     page: number,
@@ -45,7 +82,15 @@ export class MovieRepository {
     const pageNumber = Math.max(1, page);
     const size = Math.max(1, pageSize);
 
-    const where = this.buildWhereClause(search, genreSlug, countrySlug, languageSlug, platformSlug, year, yearFrom, yearTo);
+    let searchIds: string[] | null = null;
+    if (search && search.trim().length > 0) {
+      searchIds = await this.findMovieIdsMatchingSearch(search);
+      if (searchIds.length === 0) {
+        return { data: [], total: 0, currentPage: pageNumber, totalPages: 0 };
+      }
+    }
+
+    const where = this.buildWhereClause(searchIds, genreSlug, countrySlug, languageSlug, platformSlug, year, yearFrom, yearTo);
     const skip = (pageNumber - 1) * size;
 
     // Determinar ordenação - padrão rating DESC com ano como ordenação secundária
@@ -99,9 +144,9 @@ export class MovieRepository {
   }
 
   private buildWhereClause(
-    search?: string, 
-    genreSlug?: string, 
-    countrySlug?: string, 
+    searchIds?: string[] | null,
+    genreSlug?: string,
+    countrySlug?: string,
     languageSlug?: string,
     platformSlug?: string,
     year?: number,
@@ -109,34 +154,12 @@ export class MovieRepository {
     yearTo?: number
   ): Prisma.ScrapedMovieWhereInput {
     const whereClause: Prisma.ScrapedMovieWhereInput = {};
-    
-    // Filtro por termo de busca em múltiplos campos (busca fuzzy)
-    if (search) {
-      // Quebrar em palavras: "floresraras" → ["flores", "raras"]
-      const searchWords = search
-        .replace(/([a-z])([A-Z])/g, '$1 $2')  // Separar camelCase
-        .split(/[\s\-_]+/)
-        .filter(word => word.length > 0);
 
-      // Se houver múltiplas palavras, procurar por cada uma (AND lógico)
-      if (searchWords.length > 1) {
-        whereClause.AND = searchWords.map(word => ({
-          OR: [
-            { title: { contains: word, mode: 'insensitive' } },
-            { alternativeTitlePt: { contains: word, mode: 'insensitive' } },
-            { originalTitle: { contains: word, mode: 'insensitive' } },
-          ],
-        }));
-      } else {
-        // Se uma palavra só, procurar normalmente
-        whereClause.OR = [
-          { title: { contains: search, mode: 'insensitive' } },
-          { alternativeTitlePt: { contains: search, mode: 'insensitive' } },
-          { originalTitle: { contains: search, mode: 'insensitive' } },
-        ];
-      }
+    // IDs pré-calculados pelo termo de busca (ver findMovieIdsMatchingSearch)
+    if (searchIds) {
+      whereClause.id = { in: searchIds };
     }
-    
+
     // Filtro por gênero
     if (genreSlug) {
       whereClause.genres = {
