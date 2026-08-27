@@ -21,6 +21,10 @@ const SELECTORS = {
     serviceLocale: 'a.label .title .locale',
     duration: 'p.text-link.text-footer',
     rating: 'a.display-rating',
+    avgRatingMeta: 'meta[name="twitter:data2"]',
+    ldJson: 'script[type="application/ld+json"]',
+    tabPanelDetails: '#tab-panel-details',
+    tabPanelGenres: '#tab-panel-genres',
   },
 };
 
@@ -176,6 +180,14 @@ export class MovieParserService implements IMovieParser {
         await page.goto(movieUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUTS.detailFallback });
       }
 
+      // O painel "Where to watch" é carregado de forma assíncrona (CSI) após o load da página.
+      // Espera ele aparecer antes de extrair; se não aparecer, assume que o filme não tem streaming listado.
+      try {
+        await page.waitForSelector(SELECTORS.moviePage.serviceItem, { timeout: 10000 });
+      } catch {
+        this.logger.warn(`⏳ Painel "Where to watch" não carregou a tempo para ${movieUrl}`);
+      }
+
       const pageData = await page.evaluate((s): MoviePageData => {
         const query = (selector: string, attribute = 'content') =>
           document.querySelector(selector)?.getAttribute(attribute) || null;
@@ -229,29 +241,53 @@ export class MovieParserService implements IMovieParser {
             return match ? match[1] : null;
           })(),
           rating: (() => {
+            // Fonte primária: bloco JSON-LD (schema.org), mais estável que os elementos visuais da página
+            const ldJsonEl = document.querySelector(s.moviePage.ldJson);
+            if (ldJsonEl?.textContent) {
+              try {
+                const jsonText = ldJsonEl.textContent
+                  .replace(/\/\*\s*<!\[CDATA\[\s*\*\//, '')
+                  .replace(/\/\*\s*\]\]>\s*\*\//, '')
+                  .trim();
+                const ratingValue = JSON.parse(jsonText)?.aggregateRating?.ratingValue;
+                if (ratingValue !== undefined && ratingValue !== null) {
+                  return String(ratingValue);
+                }
+              } catch {}
+            }
+
+            // Fallback: meta twitter:data2 (ex: "2.76 out of 5")
+            const metaRating = query(s.moviePage.avgRatingMeta);
+            const metaMatch = metaRating?.match(/^([\d.]+)/);
+            if (metaMatch) return metaMatch[1];
+
+            // Fallback: seletor visual antigo, caso volte a existir
             const el = document.querySelector(s.moviePage.rating);
-            if (!el) return '0';
-            const value = el.textContent.trim();
-            return value ? value : '0';
+            const value = el?.textContent?.trim();
+            return value || '0';
           })(),
           genres: Array.from(
-            document.querySelectorAll('#tab-genres .text-sluglist.capitalize:nth-of-type(1) a.text-slug'),
+            document.querySelectorAll(`${s.moviePage.tabPanelGenres} .text-sluglist.capitalize:nth-of-type(1) a.text-slug`),
           ).map((el) => el.textContent?.trim() || ''),
           country: (() => {
-            const detailsTab = document.querySelector('#tab-details');
+            const detailsTab = document.querySelector(s.moviePage.tabPanelDetails);
             let countries: string[] = [];
             if (detailsTab) {
               const h3s = Array.from(detailsTab.querySelectorAll('h3'));
               for (const h3 of h3s) {
                 const h3Text = h3.textContent?.trim().toLowerCase();
                 if (h3Text === 'country' || h3Text === 'countries') {
-                  const next = h3.nextElementSibling;
-                  if (next && next.classList.contains('text-sluglist')) {
-                    countries = countries.concat(
-                      Array.from(next.querySelectorAll('a.text-slug')).map(
-                        (el) => el.textContent?.trim() || '',
-                      ),
-                    );
+                  let sibling = h3.nextElementSibling;
+                  while (sibling && !/^h[1-6]$/i.test(sibling.tagName)) {
+                    if (sibling.classList.contains('text-sluglist')) {
+                      countries = countries.concat(
+                        Array.from(sibling.querySelectorAll('a.text-slug')).map(
+                          (el) => el.textContent?.trim() || '',
+                        ),
+                      );
+                      break;
+                    }
+                    sibling = sibling.nextElementSibling;
                   }
                 }
               }
@@ -259,20 +295,24 @@ export class MovieParserService implements IMovieParser {
             return countries;
           })(),
           language: (() => {
-            const detailsTab = document.querySelector('#tab-details');
+            const detailsTab = document.querySelector(s.moviePage.tabPanelDetails);
             let languages: string[] = [];
             if (detailsTab) {
               const h3s = Array.from(detailsTab.querySelectorAll('h3'));
               for (const h3 of h3s) {
                 const h3Text = h3.textContent?.trim().toLowerCase();
                 if (h3Text === 'language' || h3Text === 'primary language') {
-                  const next = h3.nextElementSibling;
-                  if (next && next.classList.contains('text-sluglist')) {
-                    languages = languages.concat(
-                      Array.from(next.querySelectorAll('a.text-slug')).map(
-                        (el) => el.textContent?.trim() || '',
-                      ),
-                    );
+                  let sibling = h3.nextElementSibling;
+                  while (sibling && !/^h[1-6]$/i.test(sibling.tagName)) {
+                    if (sibling.classList.contains('text-sluglist')) {
+                      languages = languages.concat(
+                        Array.from(sibling.querySelectorAll('a.text-slug')).map(
+                          (el) => el.textContent?.trim() || '',
+                        ),
+                      );
+                      break;
+                    }
+                    sibling = sibling.nextElementSibling;
                   }
                 }
               }
