@@ -20,6 +20,8 @@ const serviceMapping: Record<string, string> = {
   'Apple TV': 'apple-tv-plus',
   'Apple TV+': 'apple-tv-plus',
   'Apple TV Plus Amazon Channel': 'apple-tv-plus',
+  'Apple TV Amazon Channel': 'apple-tv-plus',
+  'Apple TV Store': 'apple-tv-store',
 
   // HBO Max
   'HBO Max': 'hbo-max',
@@ -60,6 +62,7 @@ const serviceMapping: Record<string, string> = {
   'Box Brazil Play Amazon Channel': 'box-brazil-play',
   'Filmelier Plus Amazon Channel': 'filmelier-plus',
   'Belas Artes à La Carte': 'belas-artes',
+  'CurtaOn Amazon Channel': 'curtaon',
 
   // Especializadas
   'Cultpix': 'cultpix',
@@ -69,6 +72,11 @@ const serviceMapping: Record<string, string> = {
   'Runtime': 'runtime',
   'Filmicca': 'filmicca',
   'Lionsgate+ Amazon Channels': 'lionsgate-plus',
+  'Diamond Films Amazon Channel': 'diamond-films',
+  'Artiflix': 'artiflix',
+  'Booh Amazon Channel': 'booh',
+  'DOCSVILLE': 'docsville',
+  'MGM+ Apple TV Channel': 'mgm-plus',
 
   // Gratuitas
   'Libreflix': 'libreflix',
@@ -87,15 +95,23 @@ const serviceMapping: Record<string, string> = {
   'Shahid VIP': 'shahid-vip',
   'Sun Nxt': 'sun-nxt',
   'Tentkotta': 'tentkotta',
+
+  // Sony
+  'Sony One Amazon Channel': 'sony',
 };
+
+// Plataformas de curadoria manual: o script nunca conecta nem desconecta
+// essas, preservando exatamente o que já está associado a cada filme.
+const MANUAL_PLATFORM_SLUGS = ['outros', 'drive', 'twitter', 'youtube'];
 
 async function main() {
   console.log('🔗 Iniciando associação de filmes às plataformas...');
   
-  // Buscar todos os filmes com seus serviços de streaming
+  // Buscar todos os filmes com seus serviços de streaming e plataformas já conectadas
   const movies = await prisma.scrapedMovie.findMany({
     include: {
       streamingServices: true,
+      streamingPlatforms: { select: { slug: true } },
     },
   });
 
@@ -107,35 +123,40 @@ async function main() {
   let errorCount = 0;
 
   for (const movie of movies) {
-    const platformSlugs = new Set<string>();
-    
-    // Analisar cada serviço de streaming do filme
+    // Plataformas de curadoria manual já conectadas ao filme: preservadas sem alteração.
+    const manualSlugs = movie.streamingPlatforms
+      .map((p) => p.slug)
+      .filter((slug) => MANUAL_PLATFORM_SLUGS.includes(slug));
+
+    // Plataformas derivadas dos serviços raspados + mapeamento.
+    const derivedSlugs = new Set<string>();
     for (const service of movie.streamingServices) {
       const platformSlug = serviceMapping[service.service];
-      
+
       if (platformSlug) {
-        platformSlugs.add(platformSlug);
+        derivedSlugs.add(platformSlug);
       } else {
         skippedServices.add(service.service);
       }
     }
 
-    // Associar o filme às plataformas identificadas
-    if (platformSlugs.size > 0) {
+    const finalSlugs = new Set([...manualSlugs, ...derivedSlugs]);
+
+    if (finalSlugs.size > 0) {
       try {
         await prisma.scrapedMovie.update({
           where: { id: movie.id },
           data: {
             streamingPlatforms: {
-              connect: Array.from(platformSlugs).map(slug => ({ slug })),
+              set: Array.from(finalSlugs).map(slug => ({ slug })),
             },
           },
         });
-        
+
         processedMovies++;
-        totalAssociations += platformSlugs.size;
-        
-        console.log(`✅ ${movie.title}: conectado a [${Array.from(platformSlugs).join(', ')}]`);
+        totalAssociations += finalSlugs.size;
+
+        console.log(`✅ ${movie.title}: conectado a [${Array.from(finalSlugs).join(', ')}]`);
       } catch (error) {
         errorCount++;
         console.error(`❌ Erro ao processar ${movie.title}:`, error instanceof Error ? error.message : String(error));
