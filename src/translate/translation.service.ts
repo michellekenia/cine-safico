@@ -7,6 +7,90 @@ export class TranslationService {
   private readonly logger = new Logger(TranslationService.name);
 
   constructor(private readonly prisma: PrismaService) { }
+
+  /**
+   * Traduz um texto via MyMemory (API gratuita, sem chave). O limite da API é de
+   * ~500 caracteres por requisição, então sinopses longas são divididas em frases
+   * e traduzidas em partes, depois remontadas.
+   */
+  private async translateWithMyMemory(text: string, from = 'en', to = 'pt'): Promise<string> {
+    const chunks = this.splitIntoChunks(text, 450);
+    const translatedChunks: string[] = [];
+
+    for (const chunk of chunks) {
+      translatedChunks.push(await this.translateChunkWithRetry(chunk, from, to));
+
+      if (chunks.length > 1) {
+        await new Promise((res) => setTimeout(res, 500));
+      }
+    }
+
+    return translatedChunks.join(' ');
+  }
+
+  /**
+   * A MyMemory ocasionalmente responde com status 200 mas texto traduzido vazio,
+   * sem motivo aparente (falha transitória do lado deles). Tenta de novo antes de desistir.
+   */
+  private async translateChunkWithRetry(
+    chunk: string,
+    from: string,
+    to: string,
+    attempts = 3,
+  ): Promise<string> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=${from}|${to}`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`MyMemory respondeu com status ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.responseStatus !== 200 || !data.responseData?.translatedText) {
+          throw new Error(`MyMemory falhou: ${data.responseDetails || JSON.stringify(data)}`);
+        }
+
+        return data.responseData.translatedText;
+      } catch (e) {
+        lastError = e;
+        if (attempt < attempts) {
+          await new Promise((res) => setTimeout(res, 1000));
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * Divide um texto em pedaços de até maxLength caracteres, respeitando limites de frase
+   * sempre que possível (evita cortar no meio de uma sentença).
+   */
+  private splitIntoChunks(text: string, maxLength: number): string[] {
+    if (text.length <= maxLength) return [text];
+
+    const sentences = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+    const chunks: string[] = [];
+    let current = '';
+
+    for (const sentence of sentences) {
+      if (current.length > 0 && (current + sentence).length > maxLength) {
+        chunks.push(current.trim());
+        current = sentence;
+      } else {
+        current += sentence;
+      }
+    }
+
+    if (current.trim().length > 0) chunks.push(current.trim());
+    return chunks;
+  }
+
   /**
    * Traduz apenas as sinopses dos filmes que ainda não possuem tradução.
    * Processa em lotes para não sobrecarregar a API de tradução.
@@ -36,12 +120,12 @@ export class TranslationService {
 
     for (const movie of movies) {
       try {
-        const result = await translate(movie.synopsisEn, { to: 'pt' });
+        const translatedText = await this.translateWithMyMemory(movie.synopsisEn);
 
         // Atualiza apenas a sinopse
         await this.prisma.scrapedMovie.update({
           where: { id: movie.id },
-          data: { synopsisPt: result.text },
+          data: { synopsisPt: translatedText },
         });
 
         this.logger.log(`Sinopse traduzida para o filme ID ${movie.id}`);
