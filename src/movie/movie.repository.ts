@@ -29,6 +29,17 @@ type PaginatedResult<T> = {
 const UNACCENT_FROM = 'àáâãäåèéêëìíîïòóôõöøùúûüçñýÿ';
 const UNACCENT_TO = 'aaaaaaeeeeiiiioooooouuuucnyy';
 
+// Remove acentos de um termo de busca usando o mesmo mapeamento acima, para que o termo
+// digitado seja comparado no mesmo formato (sem acento) aplicado às colunas no banco.
+function unaccent(text: string): string {
+  let result = '';
+  for (const char of text) {
+    const index = UNACCENT_FROM.indexOf(char);
+    result += index >= 0 ? UNACCENT_TO[index] : char;
+  }
+  return result;
+}
+
 @Injectable()
 export class MovieRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -42,18 +53,21 @@ export class MovieRepository {
       .replace(/([a-z])([A-Z])/g, '$1 $2')
       .split(/[\s\-_]+/)
       .filter((word) => word.length > 0)
-      .map((word) => word.toLowerCase());
+      // normalize() garante forma NFC antes de remover acentos: alguns títulos raspados
+      // guardam acento como caractere combinante separado (ex: "I" + acento grave em vez
+      // de "Ì"), o que faz o translate() abaixo não reconhecer o caractere.
+      .map((word) => unaccent(word.normalize('NFC').toLowerCase()));
 
     if (searchWords.length === 0) return [];
 
     const wordConditions = searchWords.map(
       (word) => Prisma.sql`(
-        translate(lower("title"), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
-        OR translate(lower(COALESCE("originalTitle", '')), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
-        OR translate(lower(COALESCE("alternativeTitlePt", '')), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
+        translate(lower(normalize("title", NFC)), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
+        OR translate(lower(normalize(COALESCE("originalTitle", ''), NFC)), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
+        OR translate(lower(normalize(COALESCE("alternativeTitlePt", ''), NFC)), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
         OR EXISTS (
           SELECT 1 FROM unnest("alternativeTitles") AS alt
-          WHERE translate(lower(alt), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
+          WHERE translate(lower(normalize(alt, NFC)), ${UNACCENT_FROM}, ${UNACCENT_TO}) LIKE ${'%' + word + '%'}
         )
       )`,
     );
