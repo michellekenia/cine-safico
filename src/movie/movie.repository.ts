@@ -633,41 +633,40 @@ async findManyByCountry(country: string, take: number) {
 
     if (!list) return null;
 
-    const [moviesResult, total] = await this.prisma.$transaction([
-      this.prisma.movieList.findUnique({
-        where: { slug },
-        select: {
-          movies: {
-            select: {
-              slug: true,
-              title: true,
-              releaseDate: true,
-              rating: true,
-              posterImage: true,
-              genres: {
-                select: {
-                  nomePt: true,
-                  slug: true,
-                },
+    const moviesResult = await this.prisma.movieList.findUnique({
+      where: { slug },
+      select: {
+        movies: {
+          select: {
+            slug: true,
+            title: true,
+            releaseDate: true,
+            rating: true,
+            posterImage: true,
+            genres: {
+              select: {
+                nomePt: true,
+                slug: true,
               },
             },
-            take: pageSize,
-            skip: (page - 1) * pageSize,
           },
         },
-      }),
-      this.prisma.scrapedMovie.count({
-        where: {
-          lists: {
-            some: { slug },
-          },
-        },
-      }),
-    ]);
+      },
+    });
+
+    const allMovies = moviesResult?.movies || [];
+    const sortedMovies = [...allMovies].sort((a, b) => {
+      const ratingA = parseFloat(a.rating ?? '');
+      const ratingB = parseFloat(b.rating ?? '');
+      return (Number.isNaN(ratingB) ? -1 : ratingB) - (Number.isNaN(ratingA) ? -1 : ratingA);
+    });
+
+    const total = sortedMovies.length;
+    const movies = sortedMovies.slice((page - 1) * pageSize, page * pageSize);
 
     return {
       list,
-      movies: moviesResult?.movies || [],
+      movies,
       total,
       currentPage: page,
       totalPages: Math.ceil(total / pageSize),
